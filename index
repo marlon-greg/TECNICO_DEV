@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light" data-font="md">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Técnico em Desenvolvimento de Sistemas — SENAI</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/themes.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">SENAI</div>
+  <div class="header-info">
+    <h1>Técnico em Desenvolvimento de Sistemas</h1>
+    <p id="header-sub">Escola SENAI Ítalo Bologna</p>
+  </div>
+  <div class="header-right" id="admin-header-actions">
+    <button class="btn btn-ghost" onclick="AdminPanel.openMoveModal()" title="Mover matéria de semestre">&#8644; Mover Matéria</button>
+  </div>
+</header>
+
+<!-- CONTEÚDO PRINCIPAL -->
+<div class="container" id="app"></div>
+
+<!-- ═══════════════════════════════════════
+     MODAL: VISUALIZAR AULA
+═══════════════════════════════════════ -->
+<div class="overlay" id="overlay">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div class="modal-head-info">
+        <h3 id="m-title"></h3>
+        <p id="m-sub"></p>
+      </div>
+      <div class="modal-acts">
+        <button class="btn btn-red" onclick="App.printLesson()">&#8595; PDF</button>
+        <button class="btn admin-only" id="btn-delete-lesson" onclick="App.deleteLesson()">&#128465; Excluir</button>
+        <button class="btn btn-x" onclick="App.closeModal()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="tabs" id="modal-tabs">
+      <div class="tab active" onclick="App.switchTab('content')">Conteúdo</div>
+      <div class="tab" onclick="App.switchTab('notes')">Notas do Professor</div>
+      <div class="tab admin-only" onclick="App.switchTab('raw')">&#9998; Editar</div>
+    </div>
+    <div class="modal-body">
+      <div class="tab-pane active md" id="pane-content"></div>
+      <div class="tab-pane md" id="pane-notes"></div>
+      <div class="tab-pane" id="pane-raw">
+        <p class="editor-hint">Edite o JSON desta aula e salve. O campo <code>status</code> aceita <code>"completa"</code> ou <code>"em-breve"</code>.</p>
+        <textarea class="editor" id="json-ed"></textarea>
+        <div class="editor-actions">
+          <button class="btn btn-red" onclick="App.saveEdit()">Salvar alterações</button>
+          <button class="btn" onclick="App.switchTab('content')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     MODAL: MOVER MATÉRIA
+═══════════════════════════════════════ -->
+<div class="overlay" id="overlay-move">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <div class="modal-head-info">
+        <h3>Mover Matéria de Semestre</h3>
+        <p>Selecione a matéria e o semestre de destino</p>
+      </div>
+      <button class="btn btn-x" onclick="AdminPanel.closeMoveModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Matéria</label>
+        <select class="form-select" id="move-mat-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mover para o semestre</label>
+        <select class="form-select" id="move-sem-select"></select>
+      </div>
+      <div class="editor-actions" style="margin-top:1rem">
+        <button class="btn btn-red" onclick="AdminPanel.confirmMove()">Confirmar</button>
+        <button class="btn" onclick="AdminPanel.closeMoveModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PAINEL DE ACESSIBILIDADE (flutuante)
+═══════════════════════════════════════ -->
+<div class="a11y-toggle" onclick="A11y.toggle()" title="Acessibilidade">
+  <span>&#9788;</span>
+</div>
+<div class="a11y-panel" id="a11y-panel">
+  <div class="a11y-title">Acessibilidade</div>
+
+  <div class="a11y-group">
+    <div class="a11y-label">Tema</div>
+    <div class="a11y-row">
+      <button class="a11y-btn" onclick="A11y.setTheme('light')" data-theme="light">&#9728; Claro</button>
+      <button class="a11y-btn" onclick="A11y.setTheme('dark')" data-theme="dark">&#9790; Escuro</button>
+      <button class="a11y-btn" onclick="A11y.setTheme('contrast')" data-theme="contrast">&#11044; Contraste</button>
+    </div>
+  </div>
+
+  <div class="a11y-group">
+    <div class="a11y-label">Tamanho do texto</div>
+    <div class="a11y-row">
+      <button class="a11y-btn" onclick="A11y.setFont('sm')">A-</button>
+      <button class="a11y-btn" onclick="A11y.setFont('md')">A</button>
+      <button class="a11y-btn" onclick="A11y.setFont('lg')">A+</button>
+    </div>
+  </div>
+
+  <div class="a11y-group">
+    <div class="a11y-label">Espaçamento</div>
+    <div class="a11y-row">
+      <button class="a11y-btn" onclick="A11y.setSpacing('normal')">Normal</button>
+      <button class="a11y-btn" onclick="A11y.setSpacing('wide')">Amplo</button>
+    </div>
+  </div>
+
+  <div class="a11y-group">
+    <div class="a11y-label">Fonte</div>
+    <div class="a11y-row">
+      <button class="a11y-btn" onclick="A11y.setFontFamily('sans')">Sans</button>
+      <button class="a11y-btn" onclick="A11y.setFontFamily('dyslexic')">Dislexia</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/accessibility.js"></script>
+
+</body>
+</html>
