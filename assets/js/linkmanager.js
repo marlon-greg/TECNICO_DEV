@@ -74,13 +74,28 @@ var LinkManager = (function () {
     var hash = window.location.hash.replace("#", "").trim();
 
     if (!hash) {
-      // Sem hash — verifica se é admin (sem nenhum parâmetro) ou bloqueia
+      // Sem hash — se tem Firebase e usuário é docente, passa direto
+      if (
+        window.FIREBASE_CONFIG &&
+        typeof FB !== "undefined" &&
+        FB.isDocente()
+      ) {
+        resolved = null;
+        if (onReady) onReady(null);
+        return;
+      }
+      // Sem Firebase: verifica ?sem= ou ?admin=
       var params = new URLSearchParams(window.location.search);
       if (!params.has("sem") && !params.has("admin")) {
+        // Sem Firebase configurado → abre como admin local
+        if (!window.FIREBASE_CONFIG) {
+          resolved = null;
+          if (onReady) onReady(null);
+          return;
+        }
         showBlockedScreen("Acesse pelo link fornecido pelo seu professor.");
         return;
       }
-      // Modo admin ou link legado ?sem=N
       resolved = null;
       if (onReady) onReady(null);
       return;

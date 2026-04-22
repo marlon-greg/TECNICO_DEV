@@ -71,13 +71,13 @@ var App = (function () {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {}
     // Sincroniza com Firebase se admin logado
-    if (FB && FB.isAdmin && FB.isAdmin()) {
+    if (FB && FB.isDocente()) {
       syncToFirebase();
     }
   }
 
   function syncToFirebase() {
-    if (!state || !FB.isAdmin()) return;
+    if (!state || !FB.isDocente()) return;
     state.semestres.forEach(function (sem) {
       sem.materias.forEach(function (mat) {
         if (mat.aulas && mat.aulas.length > 0) {
@@ -640,46 +640,57 @@ var App = (function () {
   // ── INIT ──────────────────────────────────────────────
 
   function init() {
-    var hash = window.location.hash.replace("#", "").trim();
-    var hasHash = !!hash;
-
-    // 1. Auth inicia primeiro (Firebase)
-    Auth.init(hasHash, function (adminMode) {
-      // 2. LinkManager resolve hash se for aluno
-      if (!adminMode && hasHash) {
-        LinkManager.init(function (resolvedLink) {
-          detectMode(resolvedLink, false);
-          Schedule.init();
-          Materials.init();
-          loadStateAndRender();
-        });
-      } else {
-        // Admin ou sem hash sem login → LinkManager ainda carrega links
-        LinkManager.init(function () {
-          detectMode(null, adminMode);
-          Schedule.init();
-          Materials.init();
-          loadStateAndRender();
-        });
+    FB.init(function (user) {
+      if (!user && window.FIREBASE_CONFIG) {
+        // Firebase configurado mas não logado → tela de login
+        FB.showLoginScreen(null);
+        return;
       }
+      bootApp(user);
     });
   }
 
-  function loadStateAndRender() {
-    loadState();
-
-    // Se admin: tenta carregar aulas do Firebase por cima do localStorage
-    if (!isViewer && FB.isAdmin()) {
-      loadFromFirebase(function () {
-        render();
+  function bootApp(user) {
+    // Sem Firebase configurado → modo local, admin direto
+    if (!window.FIREBASE_CONFIG) {
+      isViewer = false;
+      LinkManager.init(function (resolvedLink) {
+        detectMode(resolvedLink);
+        finishBoot();
       });
-    } else {
-      // Aluno: tenta Firebase, fallback localStorage
-      loadFromFirebase(function () {
-        render();
-      });
+      return;
     }
 
+    if (user && FB.isAluno()) {
+      // Aluno logado → precisa de link válido
+      LinkManager.init(function (resolvedLink) {
+        if (!resolvedLink) {
+          FB.showLoginScreen("Acesse pelo link fornecido pelo seu professor.");
+          return;
+        }
+        detectMode(resolvedLink);
+        finishBoot();
+      });
+      return;
+    }
+
+    // Docente → admin completo
+    if (user && FB.isDocente()) {
+      isViewer = false;
+      addUserBadge(user);
+    }
+
+    LinkManager.init(function (resolvedLink) {
+      if (!user) detectMode(resolvedLink);
+      finishBoot();
+    });
+  }
+
+  function finishBoot() {
+    Schedule.init();
+    Materials.init();
+    loadState();
+    loadFromFirestore();
     document.getElementById("overlay").addEventListener("click", function (e) {
       if (e.target === this) closeModal();
     });
@@ -690,37 +701,55 @@ var App = (function () {
       });
   }
 
-  function loadFromFirebase(cb) {
-    if (!state || !state.semestres) {
-      if (cb) cb();
+  function loadFromFirestore() {
+    if (!window.FIREBASE_CONFIG || !state) {
+      render();
       return;
     }
-    var pending = 0;
+    var total = 0;
+    var done = 0;
+    state.semestres.forEach(function (sem) {
+      total += sem.materias.length;
+    });
+    if (total === 0) {
+      render();
+      return;
+    }
     state.semestres.forEach(function (sem) {
       sem.materias.forEach(function (mat) {
-        pending++;
-        FB.loadAulas(sem.id, mat.id)
+        FB.getAulas(sem.id, mat.id)
           .then(function (aulas) {
-            if (aulas && aulas.length > 0) mat.aulas = aulas;
-            pending--;
-            if (pending === 0 && cb) cb();
+            if (aulas.length > 0) mat.aulas = aulas;
           })
-          .catch(function () {
-            pending--;
-            if (pending === 0 && cb) cb();
+          .catch(function () {})
+          .finally(function () {
+            done++;
+            if (done === total) render();
           });
       });
     });
-    if (pending === 0 && cb) cb();
+  }
+
+  function addUserBadge(user) {
+    var header = document.getElementById("admin-header-actions");
+    if (!header) return;
+    var badge = document.createElement("div");
+    badge.className = "user-badge";
+    badge.innerHTML =
+      (user.photoURL
+        ? '<img src="' +
+          user.photoURL +
+          '" style="width:24px;height:24px;border-radius:50%">'
+        : "") +
+      "<span>" +
+      (user.displayName || user.email) +
+      "</span>" +
+      '<button onclick="FB.logout()" class="btn btn-ghost" style="font-size:.7rem;padding:.2rem .5rem">Sair</button>';
+    header.appendChild(badge);
   }
 
   // ── ABRIR CRONOGRAMA ──────────────────────────────────
 
-  function abrirCronograma(semId, matId, matNome, matCh) {
-    Schedule.openCronogramaModal(semId, matId, matNome, matCh);
-  }
-
-  // ── ABRIR CRONOGRAMA ──────────────────────────────────────
   function abrirCronograma(semId, matId, matNome, matCh) {
     Schedule.openCronogramaModal(semId, matId, matNome, matCh);
   }
@@ -828,7 +857,19 @@ var AdminPanel = (function () {
   };
 })();
 
-// Inicializa
+// Inicializa — aguarda firebase-config.js carregar (async), com fallback de 2s
 document.addEventListener("DOMContentLoaded", function () {
-  App.init();
+  var waited = 0;
+  var interval = setInterval(function () {
+    waited += 50;
+    // FIREBASE_CONFIG definido (mesmo null) = config tentou carregar
+    var configReady = Object.prototype.hasOwnProperty.call(
+      window,
+      "FIREBASE_CONFIG",
+    );
+    if (configReady || waited >= 2000) {
+      clearInterval(interval);
+      App.init();
+    }
+  }, 50);
 });
