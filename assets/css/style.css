@@ -712,3 +712,98 @@ body.viewer-mode .btn-icon { display: none !important; }
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+/* ═══════════════════════════════════════
+   PAINEL DE LINKS
+═══════════════════════════════════════ */
+.link-gen-section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: .9rem;
+  margin-bottom: .2rem;
+}
+.link-gen-row {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.link-gen-row .form-select { flex-shrink: 0; }
+
+.links-section-title {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: .4rem 0 .3rem;
+}
+.link-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .65rem .8rem;
+  margin-bottom: .45rem;
+}
+.link-item-active  { border-color: var(--border); background: var(--bg-card); }
+.link-item-inactive { background: var(--bg-sub); opacity: .7; }
+
+.link-info {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: .4rem;
+}
+.link-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+.link-sem-badge {
+  font-size: .65rem;
+  font-weight: 700;
+  background: var(--red);
+  color: #fff;
+  padding: .1rem .45rem;
+  border-radius: 99px;
+}
+.link-date {
+  font-size: .65rem;
+  color: var(--text-faint);
+}
+.link-url-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .4rem;
+  flex-wrap: wrap;
+}
+.link-url {
+  font-size: .72rem;
+  background: var(--bg-sub);
+  border: 1px solid var(--border-light);
+  padding: .2rem .5rem;
+  border-radius: 4px;
+  color: #2a7de1;
+  word-break: break-all;
+  flex: 1;
+}
+.link-actions {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.danger-sm {
+  border-color: var(--red) !important;
+  color: var(--red) !important;
+}
+.danger-sm:hover { background: rgba(200,16,46,.08) !important; }
+
+.link-footer {
+  display: flex;
+  gap: .5rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--border);
+  margin-top: .6rem;
+  flex-wrap: wrap;
+}

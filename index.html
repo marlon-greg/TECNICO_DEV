@@ -1,295 +1,640 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR" data-theme="light" data-font="md">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Técnico em Desenvolvimento de Sistemas — SENAI</title>
-  <link rel="stylesheet" href="assets/css/style.css">
-  <link rel="stylesheet" href="assets/css/themes.css">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Técnico em Desenvolvimento de Sistemas — SENAI</title>
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <link rel="stylesheet" href="assets/css/themes.css" />
+    <style>
+      /* LOGIN SCREEN */
+      #login-screen {
+        position: fixed;
+        inset: 0;
+        background: #f5f5f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      .login-box {
+        background: #fff;
+        border-radius: 14px;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        box-shadow: 0 4px 32px rgba(0, 0, 0, 0.1);
+        max-width: 360px;
+        width: 90%;
+      }
+      .login-logo {
+        display: inline-block;
+        background: #c8102e;
+        color: #fff;
+        font-weight: 700;
+        font-size: 1.1rem;
+        padding: 0.4rem 0.9rem;
+        border-radius: 4px;
+        margin-bottom: 1.2rem;
+        letter-spacing: 0.04em;
+      }
+      .login-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 0.3rem;
+        color: #1a1a2e;
+      }
+      .login-sub {
+        font-size: 0.82rem;
+        color: #999;
+        margin-bottom: 1.5rem;
+      }
+      .login-hint {
+        font-size: 0.78rem;
+        color: #555;
+        margin-bottom: 1rem;
+      }
+      .btn-login-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #333;
+        transition:
+          background 0.15s,
+          box-shadow 0.15s;
+      }
+      .btn-login-google:hover {
+        background: #f8f8f8;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+      .btn-login-google:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .login-error {
+        color: #c8102e;
+        font-size: 0.78rem;
+        min-height: 1rem;
+        margin-top: 0.6rem;
+      }
+      .login-footer {
+        font-size: 0.7rem;
+        color: #bbb;
+        margin-top: 1.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HEADER -->
+    <header>
+      <div class="logo">SENAI</div>
+      <div class="header-info">
+        <h1>Técnico em Desenvolvimento de Sistemas</h1>
+        <p id="header-sub">Escola SENAI Ítalo Bologna</p>
+      </div>
+      <div class="header-right" id="admin-header-actions">
+        <span
+          id="header-user"
+          style="
+            font-size: 0.72rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-right: 0.4rem;
+          "
+        ></span>
+        <button
+          class="btn btn-ghost admin-only"
+          onclick="LinkManager.openAdmin()"
+          title="Gerenciar links de acesso"
+        >
+          &#128279; Links
+        </button>
+        <button
+          class="btn btn-ghost admin-only"
+          onclick="AdminPanel.openMoveModal()"
+          title="Mover matéria de semestre"
+        >
+          &#8644; Mover
+        </button>
+        <button
+          class="btn btn-ghost admin-only"
+          onclick="Auth.logout()"
+          title="Sair"
+        >
+          &#x2B9E; Sair
+        </button>
+      </div>
+    </header>
 
-<!-- HEADER -->
-<header>
-  <div class="logo">SENAI</div>
-  <div class="header-info">
-    <h1>Técnico em Desenvolvimento de Sistemas</h1>
-    <p id="header-sub">Escola SENAI Ítalo Bologna</p>
-  </div>
-  <div class="header-right" id="admin-header-actions">
-    <button class="btn btn-ghost" onclick="AdminPanel.openMoveModal()" title="Mover matéria de semestre">&#8644; Mover Matéria</button>
-  </div>
-</header>
+    <!-- CONTEÚDO PRINCIPAL -->
+    <div class="container" id="app"></div>
 
-<!-- CONTEÚDO PRINCIPAL -->
-<div class="container" id="app"></div>
-
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      MODAL: VISUALIZAR AULA
 ═══════════════════════════════════════ -->
-<div class="overlay" id="overlay">
-  <div class="modal modal-lg">
-    <div class="modal-head">
-      <div class="modal-head-info">
-        <h3 id="m-title"></h3>
-        <p id="m-sub"></p>
-      </div>
-      <div class="modal-acts">
-        <button class="btn btn-red" onclick="App.printLesson()">&#8595; PDF</button>
-        <button class="btn admin-only" id="btn-delete-lesson" onclick="App.deleteLesson()">&#128465; Excluir</button>
-        <button class="btn btn-x" onclick="App.closeModal()">&#x2715;</button>
-      </div>
-    </div>
-    <div class="tabs" id="modal-tabs">
-      <div class="tab active" onclick="App.switchTab('content')">Conteúdo</div>
-      <div class="tab" onclick="App.switchTab('notes')">Notas do Professor</div>
-      <div class="tab admin-only" onclick="App.switchTab('raw')">&#9998; Editar</div>
-    </div>
-    <div class="modal-body">
-      <div class="tab-pane active md" id="pane-content"></div>
-      <div class="tab-pane md" id="pane-notes"></div>
-      <div class="tab-pane" id="pane-raw">
-        <p class="editor-hint">Edite o JSON desta aula e salve. O campo <code>status</code> aceita <code>"completa"</code> ou <code>"em-breve"</code>.</p>
-        <textarea class="editor" id="json-ed"></textarea>
-        <div class="editor-actions">
-          <button class="btn btn-red" onclick="App.saveEdit()">Salvar alterações</button>
-          <button class="btn" onclick="App.switchTab('content')">Cancelar</button>
+    <div class="overlay" id="overlay">
+      <div class="modal modal-lg">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3 id="m-title"></h3>
+            <p id="m-sub"></p>
+          </div>
+          <div class="modal-acts">
+            <button class="btn btn-red" onclick="App.printLesson()">
+              &#8595; PDF
+            </button>
+            <button
+              class="btn admin-only"
+              id="btn-delete-lesson"
+              onclick="App.deleteLesson()"
+            >
+              &#128465; Excluir
+            </button>
+            <button class="btn btn-x" onclick="App.closeModal()">
+              &#x2715;
+            </button>
+          </div>
+        </div>
+        <div class="tabs" id="modal-tabs">
+          <div class="tab active" onclick="App.switchTab('content')">
+            Conteúdo
+          </div>
+          <div class="tab" onclick="App.switchTab('notes')">
+            Notas do Professor
+          </div>
+          <div class="tab admin-only" onclick="App.switchTab('raw')">
+            &#9998; Editar
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="tab-pane active md" id="pane-content"></div>
+          <div class="tab-pane md" id="pane-notes"></div>
+          <div class="tab-pane" id="pane-raw">
+            <p class="editor-hint">
+              Edite o JSON desta aula e salve. O campo
+              <code>status</code> aceita <code>"completa"</code> ou
+              <code>"em-breve"</code>.
+            </p>
+            <textarea class="editor" id="json-ed"></textarea>
+            <div class="editor-actions">
+              <button class="btn btn-red" onclick="App.saveEdit()">
+                Salvar alterações
+              </button>
+              <button class="btn" onclick="App.switchTab('content')">
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      MODAL: MOVER MATÉRIA
 ═══════════════════════════════════════ -->
-<div class="overlay" id="overlay-move">
-  <div class="modal modal-sm">
-    <div class="modal-head">
-      <div class="modal-head-info">
-        <h3>Mover Matéria de Semestre</h3>
-        <p>Selecione a matéria e o semestre de destino</p>
+    <div class="overlay" id="overlay-move">
+      <div class="modal modal-sm">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>Mover Matéria de Semestre</h3>
+            <p>Selecione a matéria e o semestre de destino</p>
+          </div>
+          <button class="btn btn-x" onclick="AdminPanel.closeMoveModal()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Matéria</label>
+            <select class="form-select" id="move-mat-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mover para o semestre</label>
+            <select class="form-select" id="move-sem-select"></select>
+          </div>
+          <div class="editor-actions" style="margin-top: 1rem">
+            <button class="btn btn-red" onclick="AdminPanel.confirmMove()">
+              Confirmar
+            </button>
+            <button class="btn" onclick="AdminPanel.closeMoveModal()">
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
-      <button class="btn btn-x" onclick="AdminPanel.closeMoveModal()">&#x2715;</button>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Matéria</label>
-        <select class="form-select" id="move-mat-select"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mover para o semestre</label>
-        <select class="form-select" id="move-sem-select"></select>
-      </div>
-      <div class="editor-actions" style="margin-top:1rem">
-        <button class="btn btn-red" onclick="AdminPanel.confirmMove()">Confirmar</button>
-        <button class="btn" onclick="AdminPanel.closeMoveModal()">Cancelar</button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      PAINEL DE ACESSIBILIDADE (flutuante)
 ═══════════════════════════════════════ -->
-<div class="a11y-toggle" onclick="A11y.toggle()" title="Acessibilidade">
-  <span>&#9788;</span>
-</div>
-<div class="a11y-panel" id="a11y-panel">
-  <div class="a11y-title">Acessibilidade</div>
-
-  <div class="a11y-group">
-    <div class="a11y-label">Tema</div>
-    <div class="a11y-row">
-      <button class="a11y-btn" onclick="A11y.setTheme('light')" data-theme="light">&#9728; Claro</button>
-      <button class="a11y-btn" onclick="A11y.setTheme('dark')" data-theme="dark">&#9790; Escuro</button>
-      <button class="a11y-btn" onclick="A11y.setTheme('contrast')" data-theme="contrast">&#11044; Contraste</button>
+    <div class="a11y-toggle" onclick="A11y.toggle()" title="Acessibilidade">
+      <span>&#9788;</span>
     </div>
-  </div>
+    <div class="a11y-panel" id="a11y-panel">
+      <div class="a11y-title">Acessibilidade</div>
 
-  <div class="a11y-group">
-    <div class="a11y-label">Tamanho do texto</div>
-    <div class="a11y-row">
-      <button class="a11y-btn" onclick="A11y.setFont('sm')">A-</button>
-      <button class="a11y-btn" onclick="A11y.setFont('md')">A</button>
-      <button class="a11y-btn" onclick="A11y.setFont('lg')">A+</button>
+      <div class="a11y-group">
+        <div class="a11y-label">Tema</div>
+        <div class="a11y-row">
+          <button
+            class="a11y-btn"
+            onclick="A11y.setTheme('light')"
+            data-theme="light"
+          >
+            &#9728; Claro
+          </button>
+          <button
+            class="a11y-btn"
+            onclick="A11y.setTheme('dark')"
+            data-theme="dark"
+          >
+            &#9790; Escuro
+          </button>
+          <button
+            class="a11y-btn"
+            onclick="A11y.setTheme('contrast')"
+            data-theme="contrast"
+          >
+            &#11044; Contraste
+          </button>
+        </div>
+      </div>
+
+      <div class="a11y-group">
+        <div class="a11y-label">Tamanho do texto</div>
+        <div class="a11y-row">
+          <button class="a11y-btn" onclick="A11y.setFont('sm')">A-</button>
+          <button class="a11y-btn" onclick="A11y.setFont('md')">A</button>
+          <button class="a11y-btn" onclick="A11y.setFont('lg')">A+</button>
+        </div>
+      </div>
+
+      <div class="a11y-group">
+        <div class="a11y-label">Espaçamento</div>
+        <div class="a11y-row">
+          <button class="a11y-btn" onclick="A11y.setSpacing('normal')">
+            Normal
+          </button>
+          <button class="a11y-btn" onclick="A11y.setSpacing('wide')">
+            Amplo
+          </button>
+        </div>
+      </div>
+
+      <div class="a11y-group">
+        <div class="a11y-label">Fonte</div>
+        <div class="a11y-row">
+          <button class="a11y-btn" onclick="A11y.setFontFamily('sans')">
+            Sans
+          </button>
+          <button class="a11y-btn" onclick="A11y.setFontFamily('dyslexic')">
+            Dislexia
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="a11y-group">
-    <div class="a11y-label">Espaçamento</div>
-    <div class="a11y-row">
-      <button class="a11y-btn" onclick="A11y.setSpacing('normal')">Normal</button>
-      <button class="a11y-btn" onclick="A11y.setSpacing('wide')">Amplo</button>
-    </div>
-  </div>
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
 
-  <div class="a11y-group">
-    <div class="a11y-label">Fonte</div>
-    <div class="a11y-row">
-      <button class="a11y-btn" onclick="A11y.setFontFamily('sans')">Sans</button>
-      <button class="a11y-btn" onclick="A11y.setFontFamily('dyslexic')">Dislexia</button>
-    </div>
-  </div>
-</div>
-
-<!-- TOAST -->
-<div class="toast" id="toast"></div>
-
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      MODAL: CRONOGRAMA DA MATÉRIA (ADMIN)
 ═══════════════════════════════════════ -->
-<div class="overlay" id="overlay-schedule">
-  <div class="modal modal-sm">
-    <div class="modal-head">
-      <div class="modal-head-info">
-        <h3>&#128197; Cronograma</h3>
-        <p id="sch-mat-nome"></p>
+    <div class="overlay" id="overlay-schedule">
+      <div class="modal modal-sm">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128197; Cronograma</h3>
+            <p id="sch-mat-nome"></p>
+          </div>
+          <button class="btn btn-x" onclick="Schedule.closeCronogramaModal()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="sch-mat-id" />
+          <input type="hidden" id="sch-sem-id" />
+          <input type="hidden" id="sch-mat-ch" />
+
+          <div class="sch-grid">
+            <div class="form-group">
+              <label class="form-label">Aulas por dia (45min cada)</label>
+              <input
+                type="number"
+                class="form-input"
+                id="sch-aulas-dia"
+                min="1"
+                max="10"
+                oninput="Schedule.recalcPrevisao()"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dias por semana</label>
+              <input
+                type="number"
+                class="form-input"
+                id="sch-dias-sem"
+                min="1"
+                max="5"
+                oninput="Schedule.recalcPrevisao()"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Data de início do semestre</label>
+            <input
+              type="date"
+              class="form-input"
+              id="sch-data-inicio"
+              oninput="Schedule.recalcPrevisao()"
+            />
+          </div>
+
+          <div class="sch-preview">
+            <div class="sch-preview-title">&#9989; Previsão calculada</div>
+            <div class="sch-preview-grid">
+              <div class="sch-item">
+                <span class="sch-label">Total de aulas</span
+                ><strong id="sch-prev-aulas">—</strong>
+              </div>
+              <div class="sch-item">
+                <span class="sch-label">Ritmo semanal</span
+                ><strong id="sch-prev-semana">—</strong>
+              </div>
+              <div class="sch-item">
+                <span class="sch-label">Duração</span
+                ><strong id="sch-prev-semanas">—</strong>
+              </div>
+              <div class="sch-item">
+                <span class="sch-label">Início</span
+                ><strong id="sch-prev-inicio">—</strong>
+              </div>
+              <div class="sch-item">
+                <span class="sch-label">Previsão de término</span
+                ><strong id="sch-prev-fim" class="sch-fim">—</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-actions" style="margin-top: 1rem">
+            <button class="btn btn-red" onclick="Schedule.saveCronograma()">
+              Salvar
+            </button>
+            <button class="btn" onclick="Schedule.closeCronogramaModal()">
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
-      <button class="btn btn-x" onclick="Schedule.closeCronogramaModal()">&#x2715;</button>
     </div>
-    <div class="modal-body">
-      <input type="hidden" id="sch-mat-id">
-      <input type="hidden" id="sch-sem-id">
-      <input type="hidden" id="sch-mat-ch">
 
-      <div class="sch-grid">
-        <div class="form-group">
-          <label class="form-label">Aulas por dia (45min cada)</label>
-          <input type="number" class="form-input" id="sch-aulas-dia" min="1" max="10" oninput="Schedule.recalcPrevisao()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Dias por semana</label>
-          <input type="number" class="form-input" id="sch-dias-sem" min="1" max="5" oninput="Schedule.recalcPrevisao()">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Data de início do semestre</label>
-        <input type="date" class="form-input" id="sch-data-inicio" oninput="Schedule.recalcPrevisao()">
-      </div>
-
-      <div class="sch-preview">
-        <div class="sch-preview-title">&#9989; Previsão calculada</div>
-        <div class="sch-preview-grid">
-          <div class="sch-item"><span class="sch-label">Total de aulas</span><strong id="sch-prev-aulas">—</strong></div>
-          <div class="sch-item"><span class="sch-label">Ritmo semanal</span><strong id="sch-prev-semana">—</strong></div>
-          <div class="sch-item"><span class="sch-label">Duração</span><strong id="sch-prev-semanas">—</strong></div>
-          <div class="sch-item"><span class="sch-label">Início</span><strong id="sch-prev-inicio">—</strong></div>
-          <div class="sch-item"><span class="sch-label">Previsão de término</span><strong id="sch-prev-fim" class="sch-fim">—</strong></div>
-        </div>
-      </div>
-
-      <div class="editor-actions" style="margin-top:1rem">
-        <button class="btn btn-red" onclick="Schedule.saveCronograma()">Salvar</button>
-        <button class="btn" onclick="Schedule.closeCronogramaModal()">Cancelar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      MODAL: IMPORTAR PDF
 ═══════════════════════════════════════ -->
-<div class="overlay" id="overlay-pdf">
-  <div class="modal modal-md">
-    <div class="modal-head">
-      <div class="modal-head-info">
-        <h3>&#128196; Importar PDF como Aula</h3>
-        <p id="pdf-mat-nome"></p>
-      </div>
-      <button class="btn btn-x" onclick="PdfConverter.close()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <div class="pdf-upload-area" onclick="document.getElementById('pdf-file-input').click()">
-        <div class="pdf-upload-icon">&#128196;</div>
-        <div class="pdf-upload-text">Clique para selecionar um PDF</div>
-        <div class="pdf-upload-sub">O conteúdo será convertido automaticamente para o formato de aula</div>
-        <input type="file" id="pdf-file-input" accept="application/pdf" style="display:none" onchange="PdfConverter.handleFile(this)">
-      </div>
-      <div id="pdf-status" class="pdf-status"></div>
-      <div id="pdf-preview" style="display:none">
-        <div class="form-group" style="margin-top:.8rem">
-          <label class="form-label">JSON gerado — revise antes de importar</label>
-          <textarea class="editor" id="pdf-result-json" style="min-height:220px;font-size:.75rem"></textarea>
+    <div class="overlay" id="overlay-pdf">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128196; Importar PDF como Aula</h3>
+            <p id="pdf-mat-nome"></p>
+          </div>
+          <button class="btn btn-x" onclick="PdfConverter.close()">
+            &#x2715;
+          </button>
         </div>
-        <div class="editor-actions">
-          <button class="btn btn-red" onclick="PdfConverter.importJson()">&#43; Importar esta aula</button>
-          <button class="btn" onclick="PdfConverter.close()">Cancelar</button>
+        <div class="modal-body">
+          <div
+            class="pdf-upload-area"
+            onclick="document.getElementById('pdf-file-input').click()"
+          >
+            <div class="pdf-upload-icon">&#128196;</div>
+            <div class="pdf-upload-text">Clique para selecionar um PDF</div>
+            <div class="pdf-upload-sub">
+              O conteúdo será convertido automaticamente para o formato de aula
+            </div>
+            <input
+              type="file"
+              id="pdf-file-input"
+              accept="application/pdf"
+              style="display: none"
+              onchange="PdfConverter.handleFile(this)"
+            />
+          </div>
+          <div id="pdf-status" class="pdf-status"></div>
+          <div id="pdf-preview" style="display: none">
+            <div class="form-group" style="margin-top: 0.8rem">
+              <label class="form-label"
+                >JSON gerado — revise antes de importar</label
+              >
+              <textarea
+                class="editor"
+                id="pdf-result-json"
+                style="min-height: 220px; font-size: 0.75rem"
+              ></textarea>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-red" onclick="PdfConverter.importJson()">
+                &#43; Importar esta aula
+              </button>
+              <button class="btn" onclick="PdfConverter.close()">
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════════
      MODAL: MATERIAIS COMPLEMENTARES
 ═══════════════════════════════════════ -->
-<div class="overlay" id="overlay-materials">
-  <div class="modal modal-md">
-    <div class="modal-head">
-      <div class="modal-head-info">
-        <h3>&#128279; Materiais Complementares</h3>
-        <p id="mat-nome"></p>
-      </div>
-      <button class="btn btn-x" onclick="Materials.close()">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <!-- Lista de materiais -->
-      <div id="mat-list" style="margin-bottom:1rem"></div>
+    <div class="overlay" id="overlay-materials">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128279; Materiais Complementares</h3>
+            <p id="mat-nome"></p>
+          </div>
+          <button class="btn btn-x" onclick="Materials.close()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Lista de materiais -->
+          <div id="mat-list" style="margin-bottom: 1rem"></div>
 
-      <!-- Formulário de adição/edição -->
-      <div class="mat-form-section" id="mat-form-section">
-        <div class="mat-form-title" id="mat-form-title">Adicionar material</div>
-        <div class="sch-grid">
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Tipo</label>
-            <select class="form-select" id="mat-form-tipo">
-              <option value="video">▶ Vídeo</option>
-              <option value="curso">🎓 Curso</option>
-              <option value="artigo">📄 Artigo</option>
-              <option value="doc">📚 Documentação</option>
-              <option value="ferramenta">🛠 Ferramenta</option>
-              <option value="outro">🔗 Outro</option>
-            </select>
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Vincular à aula <span style="font-weight:400;opacity:.6">(opcional)</span></label>
-            <select class="form-select" id="mat-form-aula">
-              <option value="">— Geral (não vinculado a aula específica)</option>
-            </select>
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Título</label>
-            <input type="text" class="form-input" id="mat-form-titulo" placeholder="Ex: Curso completo de JavaScript — Rocketseat">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">URL</label>
-            <input type="url" class="form-input" id="mat-form-url" placeholder="https://...">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">Descrição (opcional)</label>
-            <input type="text" class="form-input" id="mat-form-descricao" placeholder="Breve descrição do material">
+          <!-- Formulário de adição/edição -->
+          <div class="mat-form-section" id="mat-form-section">
+            <div class="mat-form-title" id="mat-form-title">
+              Adicionar material
+            </div>
+            <div class="sch-grid">
+              <div class="form-group" style="grid-column: 1/-1">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" id="mat-form-tipo">
+                  <option value="video">▶ Vídeo</option>
+                  <option value="curso">🎓 Curso</option>
+                  <option value="artigo">📄 Artigo</option>
+                  <option value="doc">📚 Documentação</option>
+                  <option value="ferramenta">🛠 Ferramenta</option>
+                  <option value="outro">🔗 Outro</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column: 1/-1">
+                <label class="form-label"
+                  >Vincular à aula
+                  <span style="font-weight: 400; opacity: 0.6"
+                    >(opcional)</span
+                  ></label
+                >
+                <select class="form-select" id="mat-form-aula">
+                  <option value="">
+                    — Geral (não vinculado a aula específica)
+                  </option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column: 1/-1">
+                <label class="form-label">Título</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="mat-form-titulo"
+                  placeholder="Ex: Curso completo de JavaScript — Rocketseat"
+                />
+              </div>
+              <div class="form-group" style="grid-column: 1/-1">
+                <label class="form-label">URL</label>
+                <input
+                  type="url"
+                  class="form-input"
+                  id="mat-form-url"
+                  placeholder="https://..."
+                />
+              </div>
+              <div class="form-group" style="grid-column: 1/-1">
+                <label class="form-label">Descrição (opcional)</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="mat-form-descricao"
+                  placeholder="Breve descrição do material"
+                />
+              </div>
+            </div>
+            <div class="editor-actions" style="margin-top: 0.6rem">
+              <button
+                class="btn btn-red"
+                id="mat-save-btn"
+                onclick="Materials.saveItem()"
+              >
+                Adicionar
+              </button>
+              <button class="btn" onclick="Materials.cancelEdit()">
+                Limpar
+              </button>
+            </div>
           </div>
         </div>
-        <div class="editor-actions" style="margin-top:.6rem">
-          <button class="btn btn-red" id="mat-save-btn" onclick="Materials.saveItem()">Adicionar</button>
-          <button class="btn" onclick="Materials.cancelEdit()">Limpar</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+     MODAL: GERENCIAR LINKS (ADMIN)
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-links">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128279; Links de Acesso</h3>
+            <p>Gere links aleatórios por semestre para os alunos</p>
+          </div>
+          <button class="btn btn-x" onclick="LinkManager.closeAdmin()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Gerar novo link -->
+          <div class="link-gen-section">
+            <div class="mat-form-title">Gerar novo link</div>
+            <div class="link-gen-row">
+              <select
+                class="form-select"
+                id="new-link-sem"
+                style="width: auto; min-width: 160px"
+              >
+                <option value="1">1º Semestre</option>
+                <option value="2">2º Semestre</option>
+                <option value="3">3º Semestre</option>
+                <option value="4">4º Semestre</option>
+              </select>
+              <input
+                type="text"
+                class="form-input"
+                id="new-link-label"
+                placeholder="Ex: Turma A — 2026"
+                style="flex: 1"
+              />
+              <button class="btn btn-red" onclick="LinkManager.createLink()">
+                &#43; Gerar
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de links -->
+          <div
+            id="links-list"
+            style="margin-top: 0.8rem; max-height: 340px; overflow-y: auto"
+          ></div>
+
+          <!-- Ações globais -->
+          <div class="link-footer">
+            <button
+              class="btn-sm btn-sm-pdf"
+              onclick="LinkManager.rotateToken()"
+              title="Invalida TODOS os links de uma vez"
+            >
+              &#128260; Rodar token global
+            </button>
+            <button
+              class="btn-sm btn-sm-mat"
+              onclick="LinkManager.exportJson()"
+              title="Baixar links.json para subir no GitHub"
+            >
+              &#11015; Exportar links.json
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- SCRIPTS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-<script src="assets/js/data.js"></script>
-<script src="assets/js/schedule.js"></script>
-<script src="assets/js/extras.js"></script>
-<script src="assets/js/app.js"></script>
-<script src="assets/js/accessibility.js"></script>
-
-</body>
+    <!-- SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      if (window.pdfjsLib)
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    </script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="assets/js/firebase.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/data.js"></script>
+    <script src="assets/js/firebase.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/linkmanager.js"></script>
+    <script src="assets/js/schedule.js"></script>
+    <script src="assets/js/extras.js"></script>
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/accessibility.js"></script>
+  </body>
 </html>

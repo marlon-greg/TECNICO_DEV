@@ -5,25 +5,45 @@
 // =======================================================
 
 var App = (function () {
-
   // ── ESTADO ────────────────────────────────────────────
-  var state       = null;
-  var openMap     = {};
-  var curLesson   = null;
-  var curSemId    = null;
-  var curMatId    = null;
-  var isViewer    = false;        // modo aluno (sem edição)
-  var maxSemester = null;         // semestre máximo visível (?sem=N)
+  var state = null;
+  var openMap = {};
+  var curLesson = null;
+  var curSemId = null;
+  var curMatId = null;
+  var isViewer = false; // modo aluno (sem edição)
+  var maxSemester = null; // semestre máximo visível (?sem=N)
   var STORAGE_KEY = "curso_dev_v3";
 
   // ── MODO ALUNO / ADMIN ────────────────────────────────
 
-  function detectMode() {
+  function detectMode(resolvedLink, role) {
+    // Aluno via link hash
+    if (resolvedLink) {
+      isViewer = true;
+      maxSemester = resolvedLink.sem;
+      document.body.classList.add("viewer-mode");
+      document.getElementById("header-sub").textContent =
+        "Visualizando até o " + maxSemester + "º Semestre";
+      return;
+    }
+    // Aluno logado Google
+    if (role === "aluno") {
+      isViewer = true;
+      maxSemester = 4;
+      document.body.classList.add("viewer-mode");
+      document.getElementById("header-sub").textContent = "Modo Aluno";
+      return;
+    }
+    // Admin
+    if (role === "admin") {
+      isViewer = false;
+      return;
+    }
+    // Legado ?sem=N
     var params = new URLSearchParams(window.location.search);
-
-    // ?sem=N  → modo aluno, mostra semestres 1..N
     if (params.has("sem")) {
-      isViewer   = true;
+      isViewer = true;
       maxSemester = parseInt(params.get("sem"), 10) || 1;
       document.body.classList.add("viewer-mode");
       document.getElementById("header-sub").textContent =
@@ -47,21 +67,50 @@ var App = (function () {
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+    // Sincroniza com Firebase se admin logado
+    if (FB && FB.isAdmin && FB.isAdmin()) {
+      syncToFirebase();
+    }
+  }
+
+  function syncToFirebase() {
+    if (!state || !FB.isAdmin()) return;
+    state.semestres.forEach(function (sem) {
+      sem.materias.forEach(function (mat) {
+        if (mat.aulas && mat.aulas.length > 0) {
+          FB.saveAulas(sem.id, mat.id, mat.aulas).catch(function (e) {
+            console.warn("Firebase sync error:", e);
+          });
+        }
+      });
+    });
   }
 
   // ── HELPERS ───────────────────────────────────────────
 
   function findSem(semId) {
-    return state.semestres.find(function (s) { return s.id === semId; });
+    return state.semestres.find(function (s) {
+      return s.id === semId;
+    });
   }
   function findMat(semId, matId) {
     var sem = findSem(semId);
-    return sem ? sem.materias.find(function (m) { return m.id === matId; }) : null;
+    return sem
+      ? sem.materias.find(function (m) {
+          return m.id === matId;
+        })
+      : null;
   }
   function findLesson(semId, matId, lessonId) {
     var mat = findMat(semId, matId);
-    return mat ? mat.aulas.find(function (a) { return a.id === lessonId; }) : null;
+    return mat
+      ? mat.aulas.find(function (a) {
+          return a.id === lessonId;
+        })
+      : null;
   }
 
   // ── RENDER ────────────────────────────────────────────
@@ -70,54 +119,72 @@ var App = (function () {
     var html = "";
     state.semestres.forEach(function (sem, idx) {
       // Modo aluno: esconde semestres acima do limite
-      if (isViewer && maxSemester !== null && (idx + 1) > maxSemester) return;
+      if (isViewer && maxSemester !== null && idx + 1 > maxSemester) return;
       html += renderSemester(sem);
     });
-    document.getElementById("app").innerHTML = html || "<p style='padding:2rem;color:#aaa'>Nenhum semestre disponível.</p>";
+    document.getElementById("app").innerHTML =
+      html ||
+      "<p style='padding:2rem;color:#aaa'>Nenhum semestre disponível.</p>";
   }
 
   function renderSemester(sem) {
     return (
       '<div class="semester-block">' +
-        '<div class="semester-header" onclick="App.toggleSem(\'' + sem.id + '\')">' +
-          '<h2>' + sem.titulo + ' <span class="sub">— ' + sem.sub + '</span></h2>' +
-          '<span class="badge">' + sem.materias.length + ' matérias</span>' +
-        '</div>' +
-        '<div id="sem-' + sem.id + '">' +
-          sem.materias.map(function (mat) {
-            return renderMat(sem.id, mat);
-          }).join("") +
-        '</div>' +
-      '</div>'
+      '<div class="semester-header" onclick="App.toggleSem(\'' +
+      sem.id +
+      "')\">" +
+      "<h2>" +
+      sem.titulo +
+      ' <span class="sub">— ' +
+      sem.sub +
+      "</span></h2>" +
+      '<span class="badge">' +
+      sem.materias.length +
+      " matérias</span>" +
+      "</div>" +
+      '<div id="sem-' +
+      sem.id +
+      '">' +
+      sem.materias
+        .map(function (mat) {
+          return renderMat(sem.id, mat);
+        })
+        .join("") +
+      "</div>" +
+      "</div>"
     );
   }
 
   function renderMat(semId, mat) {
-    var key  = semId + "-" + mat.id;
+    var key = semId + "-" + mat.id;
     var open = !!openMap[key];
 
     // Aulas visíveis (modo aluno) vs todas (admin)
-    var todasAulas   = mat.aulas;
+    var todasAulas = mat.aulas;
     var aulasVisiveis = isViewer
-      ? todasAulas.filter(function(a) { return !Schedule.isOculta(semId, mat.id, a.id); })
+      ? todasAulas.filter(function (a) {
+          return !Schedule.isOculta(semId, mat.id, a.id);
+        })
       : todasAulas;
-    var done = aulasVisiveis.filter(function (a) { return a.status === "completa"; }).length;
+    var done = aulasVisiveis.filter(function (a) {
+      return a.status === "completa";
+    }).length;
     var total = aulasVisiveis.length;
-    var pct  = total > 0 ? Math.round((done / total) * 100) : 0;
+    var pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
     // Previsão de cronograma
     var prev = Schedule.getPrevisao(mat.id, mat.ch);
 
     // Badge de aulas ocultas (só admin)
-    var ocultasCount = todasAulas.filter(function(a) {
+    var ocultasCount = todasAulas.filter(function (a) {
       return Schedule.isOculta(semId, mat.id, a.id);
     }).length;
 
     // Continuação: calcula progresso unificado se tiver ch_total
-    var chTotal     = mat.ch_total || mat.ch;
-    var contDe      = mat.continuacao_de || null;
-    var isCont      = !!contDe;
-    var partLabel   = "";
+    var chTotal = mat.ch_total || mat.ch;
+    var contDe = mat.continuacao_de || null;
+    var isCont = !!contDe;
+    var partLabel = "";
     if (isCont) {
       partLabel = "Parte 2";
     } else if (mat.ch_total && mat.ch_total !== mat.ch) {
@@ -130,53 +197,106 @@ var App = (function () {
     if (mat.ch_total) {
       // Procura matéria irmã no state
       var allMats = [];
-      (state || {semestres:[]}).semestres.forEach(function(s) { s.materias.forEach(function(m){ allMats.push({semId: s.id, mat: m}); }); });
-      var irma = allMats.find(function(x) {
-        return (x.mat.continuacao_de === mat.id) || (mat.continuacao_de && x.mat.id === mat.continuacao_de) ||
-               (mat.continuacao_de && x.mat.continuacao_de === mat.continuacao_de && x.mat.id !== mat.id);
+      (state || { semestres: [] }).semestres.forEach(function (s) {
+        s.materias.forEach(function (m) {
+          allMats.push({ semId: s.id, mat: m });
+        });
+      });
+      var irma = allMats.find(function (x) {
+        return (
+          x.mat.continuacao_de === mat.id ||
+          (mat.continuacao_de && x.mat.id === mat.continuacao_de) ||
+          (mat.continuacao_de &&
+            x.mat.continuacao_de === mat.continuacao_de &&
+            x.mat.id !== mat.id)
+        );
       });
       if (irma) {
         var irmaVis = isViewer
-          ? irma.mat.aulas.filter(function(a){ return !Schedule.isOculta(irma.semId, irma.mat.id, a.id); })
+          ? irma.mat.aulas.filter(function (a) {
+              return !Schedule.isOculta(irma.semId, irma.mat.id, a.id);
+            })
           : irma.mat.aulas;
-        doneTotal  += irmaVis.filter(function(a){ return a.status === "completa"; }).length;
+        doneTotal += irmaVis.filter(function (a) {
+          return a.status === "completa";
+        }).length;
         totalAulas += irmaVis.length;
       }
     }
-    var pctTotal = totalAulas > 0 ? Math.round((doneTotal / totalAulas) * 100) : 0;
+    var pctTotal =
+      totalAulas > 0 ? Math.round((doneTotal / totalAulas) * 100) : 0;
 
     var html =
-      '<div class="subject-item' + (isCont ? ' subject-continuation" data-cont-de="' + contDe + '"' : '"') + '>' +
-        (isCont ? '<div class="cont-connector"></div>' : '') +
-        '<div class="subject-header" onclick="App.toggleMat(\'' + semId + '\',\'' + mat.id + '\')">' +
-          '<div class="s-icon' + (isCont ? ' s-icon-cont' : '') + '">' + mat.icone + '</div>' +
-          '<div class="s-info">' +
-            '<div class="s-name-row">' +
-              '<span class="s-name">' + mat.nome + '</span>' +
-              (partLabel ? '<span class="part-badge">' + partLabel + '</span>' : '') +
-            '</div>' +
-            '<div class="s-meta">' +
-              '<span>' + mat.ch + (mat.ch_total && mat.ch_total !== mat.ch ? ' <span class="ch-total">/ ' + mat.ch_total + ' total</span>' : '') + '</span>' +
-              '<span>' + total + ' aulas</span>' +
-              (done > 0 ? '<span class="done-count">' + done + ' concluídas</span>' : '') +
-              Materials.getBadge(semId, mat.id) +
-              (!isViewer && prev.semanas ? '<span class="sch-badge">' + prev.semanas + ' sem</span>' : '') +
-              (!isViewer && ocultasCount > 0 ? '<span class="hidden-badge">&#128065; ' + ocultasCount + ' ocultas</span>' : '') +
-            '</div>' +
-          '</div>' +
-          '<span class="chevron' + (open ? ' open' : '') + '">&#9654;</span>' +
-        '</div>' +
-        // Barra de progresso (sempre visível se há aulas)
-        (total > 0 ?
-          '<div class="progress-wrap">' +
-            '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
-            '<span class="progress-label">' + pct + '% esta parte</span>' +
-            (mat.ch_total && mat.ch_total !== mat.ch && totalAulas > total ?
-              '<span class="progress-label-total">(' + pctTotal + '% total)</span>' : '') +
-            (!isViewer && prev.fim ?
-              '<span class="progress-date">Previsão: ' + prev.fim.toLocaleDateString("pt-BR") + '</span>' : '') +
-          '</div>'
-        : '');
+      '<div class="subject-item' +
+      (isCont ? ' subject-continuation" data-cont-de="' + contDe + '"' : '"') +
+      ">" +
+      (isCont ? '<div class="cont-connector"></div>' : "") +
+      '<div class="subject-header" onclick="App.toggleMat(\'' +
+      semId +
+      "','" +
+      mat.id +
+      "')\">" +
+      '<div class="s-icon' +
+      (isCont ? " s-icon-cont" : "") +
+      '">' +
+      mat.icone +
+      "</div>" +
+      '<div class="s-info">' +
+      '<div class="s-name-row">' +
+      '<span class="s-name">' +
+      mat.nome +
+      "</span>" +
+      (partLabel ? '<span class="part-badge">' + partLabel + "</span>" : "") +
+      "</div>" +
+      '<div class="s-meta">' +
+      "<span>" +
+      mat.ch +
+      (mat.ch_total && mat.ch_total !== mat.ch
+        ? ' <span class="ch-total">/ ' + mat.ch_total + " total</span>"
+        : "") +
+      "</span>" +
+      "<span>" +
+      total +
+      " aulas</span>" +
+      (done > 0
+        ? '<span class="done-count">' + done + " concluídas</span>"
+        : "") +
+      Materials.getBadge(semId, mat.id) +
+      (!isViewer && prev.semanas
+        ? '<span class="sch-badge">' + prev.semanas + " sem</span>"
+        : "") +
+      (!isViewer && ocultasCount > 0
+        ? '<span class="hidden-badge">&#128065; ' +
+          ocultasCount +
+          " ocultas</span>"
+        : "") +
+      "</div>" +
+      "</div>" +
+      '<span class="chevron' +
+      (open ? " open" : "") +
+      '">&#9654;</span>' +
+      "</div>" +
+      // Barra de progresso (sempre visível se há aulas)
+      (total > 0
+        ? '<div class="progress-wrap">' +
+          '<div class="progress-bar"><div class="progress-fill" style="width:' +
+          pct +
+          '%"></div></div>' +
+          '<span class="progress-label">' +
+          pct +
+          "% esta parte</span>" +
+          (mat.ch_total && mat.ch_total !== mat.ch && totalAulas > total
+            ? '<span class="progress-label-total">(' +
+              pctTotal +
+              "% total)</span>"
+            : "") +
+          (!isViewer && prev.fim
+            ? '<span class="progress-date">Previsão: ' +
+              prev.fim.toLocaleDateString("pt-BR") +
+              "</span>"
+            : "") +
+          "</div>"
+        : "");
 
     if (open) {
       html += '<div class="lessons-list">';
@@ -185,53 +305,133 @@ var App = (function () {
       if (!isViewer) {
         html +=
           '<div class="lesson-bulk-actions">' +
-            '<button class="btn-sm" onclick="App.abrirCronograma(\'' + semId + '\',\'' + mat.id + '\',\'' + mat.nome + '\',\'' + mat.ch + '\')">&#128197; Cronograma</button>' +
-            '<button class="btn-sm btn-sm-pdf" onclick="PdfConverter.open(\'' + semId + '\',\'' + mat.id + '\',\'' + mat.nome + '\')">&#128196; Importar PDF</button>' +
-            '<button class="btn-sm btn-sm-mat" onclick="Materials.open(\'' + semId + '\',\'' + mat.id + '\',\'' + mat.nome + '\')">&#128279; Materiais</button>' +
-            (todasAulas.length > 0 ?
-              '<button class="btn-sm" onclick="Schedule.ocultarTodas(\'' + semId + '\',\'' + mat.id + '\');App.render()">&#128564; Ocultar tudo</button>' +
-              '<button class="btn-sm" onclick="Schedule.mostrarTodas(\'' + semId + '\',\'' + mat.id + '\');App.render()">&#128065; Mostrar tudo</button>'
-            : '') +
-          '</div>';
+          '<button class="btn-sm" onclick="App.abrirCronograma(\'' +
+          semId +
+          "','" +
+          mat.id +
+          "','" +
+          mat.nome +
+          "','" +
+          mat.ch +
+          "')\">&#128197; Cronograma</button>" +
+          '<button class="btn-sm btn-sm-pdf" onclick="PdfConverter.open(\'' +
+          semId +
+          "','" +
+          mat.id +
+          "','" +
+          mat.nome +
+          "')\">&#128196; Importar PDF</button>" +
+          '<button class="btn-sm btn-sm-mat" onclick="Materials.open(\'' +
+          semId +
+          "','" +
+          mat.id +
+          "','" +
+          mat.nome +
+          "')\">&#128279; Materiais</button>" +
+          (todasAulas.length > 0
+            ? '<button class="btn-sm" onclick="Schedule.ocultarTodas(\'' +
+              semId +
+              "','" +
+              mat.id +
+              "');App.render()\">&#128564; Ocultar tudo</button>" +
+              '<button class="btn-sm" onclick="Schedule.mostrarTodas(\'' +
+              semId +
+              "','" +
+              mat.id +
+              "');App.render()\">&#128065; Mostrar tudo</button>"
+            : "") +
+          "</div>";
       }
       // Modo aluno: mostra badge de materiais complementares
       if (isViewer) {
         var matBadge = Materials.getBadge(semId, mat.id);
         if (matBadge) {
-          html += '<div class="mat-badge-row" onclick="Materials.open(\'' + semId + '\',\'' + mat.id + '\',\'' + mat.nome + '\')">' + matBadge + ' Materiais complementares</div>';
+          html +=
+            '<div class="mat-badge-row" onclick="Materials.open(\'' +
+            semId +
+            "','" +
+            mat.id +
+            "','" +
+            mat.nome +
+            "')\">" +
+            matBadge +
+            " Materiais complementares</div>";
         }
       }
 
       if (aulasVisiveis.length === 0 && todasAulas.length === 0) {
         html += '<div class="empty-msg">Nenhuma aula cadastrada ainda.</div>';
       } else if (aulasVisiveis.length === 0 && isViewer) {
-        html += '<div class="empty-msg">Nenhuma aula disponível no momento.</div>';
+        html +=
+          '<div class="empty-msg">Nenhuma aula disponível no momento.</div>';
       } else {
         // Admin: mostra todas com indicador de oculta
         // Aluno: mostra só visíveis
         var listaRender = isViewer ? aulasVisiveis : todasAulas;
         listaRender.forEach(function (aula, i) {
-          var oculta  = Schedule.isOculta(semId, mat.id, aula.id);
+          var oculta = Schedule.isOculta(semId, mat.id, aula.id);
           var classes = "lesson-item" + (oculta ? " lesson-hidden" : "");
           html +=
-            '<div class="' + classes + '" onclick="App.openLesson(\'' + semId + '\',\'' + mat.id + '\',\'' + aula.id + '\')">' +
-              '<div class="l-num' + (aula.status === "completa" ? " done" : "") + '">' + (i + 1) + '</div>' +
-              '<span class="l-title">' + aula.titulo + (oculta ? ' <span class="oculta-tag">oculta</span>' : '') + '</span>' +
-              '<span class="l-status">' + (aula.status === "completa" ? "&#10003; Completa" : "Em breve") + '</span>' +
-              '<div class="lesson-actions admin-only" onclick="event.stopPropagation()">' +
-                '<button class="btn-icon" title="' + (oculta ? "Mostrar" : "Ocultar") + '" onclick="Schedule.toggleOculta(\'' + semId + '\',\'' + mat.id + '\',\'' + aula.id + '\');App.render()">' +
-                  (oculta ? '&#128065;' : '&#128564;') +
-                '</button>' +
-                '<button class="btn-icon" title="Editar" onclick="App.editLesson(\'' + semId + '\',\'' + mat.id + '\',\'' + aula.id + '\')">&#9998;</button>' +
-                '<button class="btn-icon danger" title="Excluir" onclick="App.confirmDelete(\'' + semId + '\',\'' + mat.id + '\',\'' + aula.id + '\')">&#128465;</button>' +
-              '</div>' +
-            '</div>';
+            '<div class="' +
+            classes +
+            '" onclick="App.openLesson(\'' +
+            semId +
+            "','" +
+            mat.id +
+            "','" +
+            aula.id +
+            "')\">" +
+            '<div class="l-num' +
+            (aula.status === "completa" ? " done" : "") +
+            '">' +
+            (i + 1) +
+            "</div>" +
+            '<span class="l-title">' +
+            aula.titulo +
+            (oculta ? ' <span class="oculta-tag">oculta</span>' : "") +
+            "</span>" +
+            '<span class="l-status">' +
+            (aula.status === "completa" ? "&#10003; Completa" : "Em breve") +
+            "</span>" +
+            '<div class="lesson-actions admin-only" onclick="event.stopPropagation()">' +
+            '<button class="btn-icon" title="' +
+            (oculta ? "Mostrar" : "Ocultar") +
+            '" onclick="Schedule.toggleOculta(\'' +
+            semId +
+            "','" +
+            mat.id +
+            "','" +
+            aula.id +
+            "');App.render()\">" +
+            (oculta ? "&#128065;" : "&#128564;") +
+            "</button>" +
+            '<button class="btn-icon" title="Editar" onclick="App.editLesson(\'' +
+            semId +
+            "','" +
+            mat.id +
+            "','" +
+            aula.id +
+            "')\">&#9998;</button>" +
+            '<button class="btn-icon danger" title="Excluir" onclick="App.confirmDelete(\'' +
+            semId +
+            "','" +
+            mat.id +
+            "','" +
+            aula.id +
+            "')\">&#128465;</button>" +
+            "</div>" +
+            "</div>";
         });
       }
-      html += '<button class="add-btn admin-only" onclick="App.addLesson(\'' + semId + '\',\'' + mat.id + '\')">+ Adicionar aula</button>';
-      html += '</div>';
+      html +=
+        '<button class="add-btn admin-only" onclick="App.addLesson(\'' +
+        semId +
+        "','" +
+        mat.id +
+        "')\">+ Adicionar aula</button>";
+      html += "</div>";
     }
-    html += '</div>';
+    html += "</div>";
     return html;
   }
 
@@ -252,25 +452,25 @@ var App = (function () {
 
   function openLesson(semId, matId, lessonId) {
     var lesson = findLesson(semId, matId, lessonId);
-    var mat    = findMat(semId, matId);
+    var mat = findMat(semId, matId);
     if (!lesson || !mat) return;
 
     curLesson = lesson;
-    curSemId  = semId;
-    curMatId  = matId;
+    curSemId = semId;
+    curMatId = matId;
 
     document.getElementById("m-title").textContent = lesson.titulo;
-    document.getElementById("m-sub").textContent   = mat.nome;
+    document.getElementById("m-sub").textContent = mat.nome;
 
-    document.getElementById("pane-content").innerHTML =
-      marked.parse(lesson.conteudo || "_Sem conteúdo ainda._");
+    document.getElementById("pane-content").innerHTML = marked.parse(
+      lesson.conteudo || "_Sem conteúdo ainda._",
+    );
 
     document.getElementById("pane-notes").innerHTML = lesson.notas
       ? marked.parse(lesson.notas)
       : '<p style="color:var(--text-faint);font-style:italic">Sem notas do professor.</p>';
 
-    document.getElementById("json-ed").value =
-      JSON.stringify(lesson, null, 2);
+    document.getElementById("json-ed").value = JSON.stringify(lesson, null, 2);
 
     switchTab("content");
     document.getElementById("overlay").classList.add("open");
@@ -284,7 +484,9 @@ var App = (function () {
 
   function closeModal() {
     document.getElementById("overlay").classList.remove("open");
-    curLesson = null; curSemId = null; curMatId = null;
+    curLesson = null;
+    curSemId = null;
+    curMatId = null;
   }
 
   function switchTab(tab) {
@@ -302,13 +504,18 @@ var App = (function () {
   function saveEdit() {
     try {
       var updated = JSON.parse(document.getElementById("json-ed").value);
-      var mat     = findMat(curSemId, curMatId);
-      var idx     = mat.aulas.findIndex(function (a) { return a.id === curLesson.id; });
+      var mat = findMat(curSemId, curMatId);
+      var idx = mat.aulas.findIndex(function (a) {
+        return a.id === curLesson.id;
+      });
       mat.aulas[idx] = updated;
       curLesson = updated;
       saveState();
-      document.getElementById("pane-content").innerHTML = marked.parse(updated.conteudo || "");
-      document.getElementById("pane-notes").innerHTML   = updated.notas
+      saveMatToFirestore(curSemId, curMatId);
+      document.getElementById("pane-content").innerHTML = marked.parse(
+        updated.conteudo || "",
+      );
+      document.getElementById("pane-notes").innerHTML = updated.notas
         ? marked.parse(updated.notas)
         : '<p style="color:var(--text-faint);font-style:italic">Sem notas.</p>';
       document.getElementById("m-title").textContent = updated.titulo;
@@ -325,10 +532,20 @@ var App = (function () {
   function confirmDelete(semId, matId, lessonId) {
     var lesson = findLesson(semId, matId, lessonId);
     if (!lesson) return;
-    if (!window.confirm("Excluir a aula \"" + lesson.titulo + "\"?\nEssa ação não pode ser desfeita.")) return;
+    if (
+      !window.confirm(
+        'Excluir a aula "' +
+          lesson.titulo +
+          '"?\nEssa ação não pode ser desfeita.',
+      )
+    )
+      return;
     var mat = findMat(semId, matId);
-    mat.aulas = mat.aulas.filter(function (a) { return a.id !== lessonId; });
+    mat.aulas = mat.aulas.filter(function (a) {
+      return a.id !== lessonId;
+    });
     saveState();
+    saveMatToFirestore(semId, matId);
     render();
     toast("Aula excluída.");
   }
@@ -344,19 +561,19 @@ var App = (function () {
   function addLesson(semId, matId) {
     var mat = findMat(semId, matId);
     if (!mat) return;
-    var n  = mat.aulas.length + 1;
+    var n = mat.aulas.length + 1;
     var id = matId + "-a" + String(n).padStart(2, "0");
     var nova = {
       id: id,
       titulo: "Aula " + n + " — Novo Título",
       status: "em-breve",
       conteudo: "# Aula " + n + "\n\nConteúdo a ser preenchido.",
-      notas: ""
+      notas: "",
     };
     mat.aulas.push(nova);
     saveState();
+    saveMatToFirestore(semId, matId);
     render();
-    // Abre direto para edição
     editLesson(semId, matId, id);
     toast("Aula criada! Edite o conteúdo abaixo.");
   }
@@ -366,7 +583,7 @@ var App = (function () {
   function printLesson() {
     if (!curLesson) return;
     var mat = findMat(curSemId, curMatId);
-    var w   = window.open("", "_blank");
+    var w = window.open("", "_blank");
 
     var css = [
       "body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:1rem;color:#222;line-height:1.7}",
@@ -383,24 +600,26 @@ var App = (function () {
       "td{padding:.35rem .6rem;border-bottom:1px solid #eee}",
       ".hd{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid #1a1a2e}",
       ".badge{background:#c8102e;color:#fff;padding:.3rem .8rem;border-radius:4px;font-weight:700;font-size:.85rem}",
-      "@media print{body{margin:.5rem}}"
+      "@media print{body{margin:.5rem}}",
     ].join("");
 
     var html = [
-      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">",
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">',
       "<title>" + curLesson.titulo + "</title>",
-      "<script src=\"https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js\"><\/script>",
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"><\/script>',
       "<style>" + css + "</style></head><body>",
-      "<div class=\"hd\">",
-        "<div class=\"badge\">SENAI</div>",
-        "<div><strong>" + (mat ? mat.nome : "") + "</strong><br>",
-        "<small>Técnico em Desenvolvimento de Sistemas</small></div>",
+      '<div class="hd">',
+      '<div class="badge">SENAI</div>',
+      "<div><strong>" + (mat ? mat.nome : "") + "</strong><br>",
+      "<small>Técnico em Desenvolvimento de Sistemas</small></div>",
       "</div>",
-      "<div id=\"c\"></div>",
+      '<div id="c"></div>',
       "<script>",
-        "document.getElementById('c').innerHTML=marked.parse(" + JSON.stringify(curLesson.conteudo || "") + ");",
-        "window.onload=function(){window.print();};",
-      "<\/script></body></html>"
+      "document.getElementById('c').innerHTML=marked.parse(" +
+        JSON.stringify(curLesson.conteudo || "") +
+        ");",
+      "window.onload=function(){window.print();};",
+      "<\/script></body></html>",
     ].join("");
 
     w.document.write(html);
@@ -413,23 +632,86 @@ var App = (function () {
     var el = document.getElementById("toast");
     el.textContent = msg;
     el.classList.add("show");
-    setTimeout(function () { el.classList.remove("show"); }, 2500);
+    setTimeout(function () {
+      el.classList.remove("show");
+    }, 2500);
   }
 
   // ── INIT ──────────────────────────────────────────────
 
   function init() {
-    detectMode();
-    Schedule.init();
-    Materials.init();
+    var hash = window.location.hash.replace("#", "").trim();
+    var hasHash = !!hash;
+
+    // 1. Auth inicia primeiro (Firebase)
+    Auth.init(hasHash, function (adminMode) {
+      // 2. LinkManager resolve hash se for aluno
+      if (!adminMode && hasHash) {
+        LinkManager.init(function (resolvedLink) {
+          detectMode(resolvedLink, false);
+          Schedule.init();
+          Materials.init();
+          loadStateAndRender();
+        });
+      } else {
+        // Admin ou sem hash sem login → LinkManager ainda carrega links
+        LinkManager.init(function () {
+          detectMode(null, adminMode);
+          Schedule.init();
+          Materials.init();
+          loadStateAndRender();
+        });
+      }
+    });
+  }
+
+  function loadStateAndRender() {
     loadState();
-    render();
+
+    // Se admin: tenta carregar aulas do Firebase por cima do localStorage
+    if (!isViewer && FB.isAdmin()) {
+      loadFromFirebase(function () {
+        render();
+      });
+    } else {
+      // Aluno: tenta Firebase, fallback localStorage
+      loadFromFirebase(function () {
+        render();
+      });
+    }
+
     document.getElementById("overlay").addEventListener("click", function (e) {
       if (e.target === this) closeModal();
     });
-    document.getElementById("overlay-move").addEventListener("click", function (e) {
-      if (e.target === this) AdminPanel.closeMoveModal();
+    document
+      .getElementById("overlay-move")
+      .addEventListener("click", function (e) {
+        if (e.target === this) AdminPanel.closeMoveModal();
+      });
+  }
+
+  function loadFromFirebase(cb) {
+    if (!state || !state.semestres) {
+      if (cb) cb();
+      return;
+    }
+    var pending = 0;
+    state.semestres.forEach(function (sem) {
+      sem.materias.forEach(function (mat) {
+        pending++;
+        FB.loadAulas(sem.id, mat.id)
+          .then(function (aulas) {
+            if (aulas && aulas.length > 0) mat.aulas = aulas;
+            pending--;
+            if (pending === 0 && cb) cb();
+          })
+          .catch(function () {
+            pending--;
+            if (pending === 0 && cb) cb();
+          });
+      });
     });
+    if (pending === 0 && cb) cb();
   }
 
   // ── ABRIR CRONOGRAMA ──────────────────────────────────
@@ -445,32 +727,37 @@ var App = (function () {
 
   // ── API PÚBLICA ───────────────────────────────────────
   return {
-    init          : init,
+    init: init,
     abrirCronograma: abrirCronograma,
-    toggleSem     : toggleSem,
-    toggleMat     : toggleMat,
-    openLesson    : openLesson,
-    editLesson    : editLesson,
-    closeModal    : closeModal,
-    switchTab     : switchTab,
-    saveEdit      : saveEdit,
-    confirmDelete : confirmDelete,
-    deleteLesson  : deleteLesson,
-    addLesson     : addLesson,
-    printLesson   : printLesson,
-    getState      : function () { return state; },
-    saveState     : saveState,
-    render        : render,
-    toast         : toast,
-    isViewer      : function () { return isViewer; }
+    toggleSem: toggleSem,
+    toggleMat: toggleMat,
+    openLesson: openLesson,
+    editLesson: editLesson,
+    closeModal: closeModal,
+    switchTab: switchTab,
+    saveEdit: saveEdit,
+    confirmDelete: confirmDelete,
+    deleteLesson: deleteLesson,
+    addLesson: addLesson,
+    printLesson: printLesson,
+    getState: function () {
+      return state;
+    },
+    saveState: saveState,
+    render: render,
+    toast: toast,
+    isViewer: function () {
+      return isViewer;
+    },
+    setViewer: function (v) {
+      isViewer = v;
+    },
   };
-
 })();
 
 // ── ADMIN PANEL (mover matéria) ───────────────────────
 
 var AdminPanel = (function () {
-
   function openMoveModal() {
     var state = App.getState();
     var matSel = document.getElementById("move-mat-select");
@@ -502,24 +789,30 @@ var AdminPanel = (function () {
   }
 
   function confirmMove() {
-    var matVal  = document.getElementById("move-mat-select").value;
+    var matVal = document.getElementById("move-mat-select").value;
     var destSem = document.getElementById("move-sem-select").value;
     if (!matVal || !destSem) return;
 
-    var parts  = matVal.split("|");
+    var parts = matVal.split("|");
     var srcSem = parts[0];
-    var matId  = parts[1];
+    var matId = parts[1];
 
     if (srcSem === destSem) {
       App.toast("A matéria já está nesse semestre.");
       return;
     }
 
-    var state   = App.getState();
-    var src     = state.semestres.find(function (s) { return s.id === srcSem; });
-    var dest    = state.semestres.find(function (s) { return s.id === destSem; });
-    var matIdx  = src.materias.findIndex(function (m) { return m.id === matId; });
-    var mat     = src.materias.splice(matIdx, 1)[0];
+    var state = App.getState();
+    var src = state.semestres.find(function (s) {
+      return s.id === srcSem;
+    });
+    var dest = state.semestres.find(function (s) {
+      return s.id === destSem;
+    });
+    var matIdx = src.materias.findIndex(function (m) {
+      return m.id === matId;
+    });
+    var mat = src.materias.splice(matIdx, 1)[0];
     dest.materias.push(mat);
 
     App.saveState();
@@ -528,9 +821,14 @@ var AdminPanel = (function () {
     App.toast("Matéria movida para " + dest.titulo + "!");
   }
 
-  return { openMoveModal: openMoveModal, closeMoveModal: closeMoveModal, confirmMove: confirmMove };
-
+  return {
+    openMoveModal: openMoveModal,
+    closeMoveModal: closeMoveModal,
+    confirmMove: confirmMove,
+  };
 })();
 
 // Inicializa
-document.addEventListener("DOMContentLoaded", function () { App.init(); });
+document.addEventListener("DOMContentLoaded", function () {
+  App.init();
+});
