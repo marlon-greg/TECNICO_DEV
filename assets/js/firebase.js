@@ -237,6 +237,253 @@ var FB = (function () {
     return db.collection("config").doc("global").set(data);
   }
 
+  // ── FIRESTORE: ALUNOS ────────────────────────────────
+  // Registra/atualiza aluno no Firestore ao logar
+  function registrarAluno(user) {
+    var ref = db.collection("alunos").doc(user.uid);
+    return ref.get().then(function (snap) {
+      if (!snap.exists) {
+        // Primeiro acesso — cria registro com semestre 1
+        return ref.set({
+          uid: user.uid,
+          email: user.email,
+          nome: user.displayName || user.email,
+          foto: user.photoURL || "",
+          semestre: 1,
+          ativo: true,
+          criado: new Date().toISOString(),
+          ultimo_login: new Date().toISOString(),
+        });
+      } else {
+        // Já existe — atualiza último login
+        return ref.update({ ultimo_login: new Date().toISOString() });
+      }
+    });
+  }
+
+  // Busca dados do aluno (incluindo semestre atual)
+  function getAluno(uid) {
+    return db
+      .collection("alunos")
+      .doc(uid)
+      .get()
+      .then(function (snap) {
+        return snap.exists ? snap.data() : null;
+      });
+  }
+
+  // Lista todos os alunos (só docente)
+  function getAlunos() {
+    return db
+      .collection("alunos")
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          lista.push(doc.data());
+        });
+        return lista;
+      });
+  }
+
+  // Atualiza semestre do aluno
+  function setSemestreAluno(uid, semestre) {
+    return db.collection("alunos").doc(uid).update({ semestre: semestre });
+  }
+
+  // Bloqueia/desbloqueia aluno
+  function setAtivoAluno(uid, ativo) {
+    return db.collection("alunos").doc(uid).update({ ativo: ativo });
+  }
+
+  // ── FIRESTORE: TURMAS ─────────────────────────────────
+  var LIMITE_TURMA = 32;
+
+  // Registra aluno com verificação de limite de turma
+  function registrarAlunoNaTurma(user, turmaHash) {
+    var alunoRef = db.collection("alunos").doc(user.uid);
+    var turmaRef = db.collection("turmas").doc(turmaHash);
+
+    return db.runTransaction(function (tx) {
+      return Promise.all([tx.get(alunoRef), tx.get(turmaRef)]).then(
+        function (results) {
+          var alunoSnap = results[0];
+          var turmaSnap = results[1];
+          var turmaData = turmaSnap.exists
+            ? turmaSnap.data()
+            : { count: 0, alunos: [] };
+          var jaEstaNA =
+            turmaData.alunos && turmaData.alunos.indexOf(user.uid) >= 0;
+
+          if (!jaEstaNA && turmaData.count >= LIMITE_TURMA) {
+            // Notifica docente e bloqueia
+            notificarLimiteTurma(turmaHash, user.email);
+            throw new Error("LIMITE_TURMA:" + user.email);
+          }
+
+          var now = new Date().toISOString();
+          if (!alunoSnap.exists) {
+            tx.set(alunoRef, {
+              uid: user.uid,
+              email: user.email,
+              nome: user.displayName || user.email,
+              foto: user.photoURL || "",
+              semestre: 1,
+              ativo: true,
+              turma: turmaHash,
+              criado: now,
+              ultimo_login: now,
+            });
+          } else {
+            tx.update(alunoRef, { ultimo_login: now, turma: turmaHash });
+          }
+
+          if (!jaEstaNA) {
+            var novosAlunos = (turmaData.alunos || []).concat([user.uid]);
+            tx.set(
+              turmaRef,
+              {
+                hash: turmaHash,
+                count: novosAlunos.length,
+                alunos: novosAlunos,
+                updatedAt: now,
+              },
+              { merge: true },
+            );
+          }
+        },
+      );
+    });
+  }
+
+  function notificarLimiteTurma(turmaHash, emailTentou) {
+    // Salva no Firestore para o admin ver
+    db.collection("alertas").add({
+      tipo: "limite_turma",
+      turma: turmaHash,
+      email: emailTentou,
+      timestamp: new Date().toISOString(),
+      visto: false,
+    });
+  }
+
+  function getAlertas() {
+    return db
+      .collection("alertas")
+      .orderBy("timestamp", "desc")
+      .limit(50)
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          lista.push(Object.assign({ id: doc.id }, doc.data()));
+        });
+        return lista;
+      });
+  }
+
+  function marcarAlertaVisto(id) {
+    return db.collection("alertas").doc(id).update({ visto: true });
+  }
+
+  function getTurma(hash) {
+    return db
+      .collection("turmas")
+      .doc(hash)
+      .get()
+      .then(function (snap) {
+        return snap.exists ? snap.data() : null;
+      });
+  }
+
+  // ── FIRESTORE: PUBLICAÇÕES (aulas por turma) ──────────
+  // Estrutura: /publicacoes/{semId}_{matId}_{aulaId}
+  // { aulaId, turmas: ["TODAS"] ou ["hash1","hash2"], conteudo: {...} }
+
+  function publicarAula(semId, matId, aula, turmas) {
+    // turmas = ["TODAS"] ou array de hashes
+    var id = semId + "_" + matId + "_" + aula.id;
+    return db
+      .collection("publicacoes")
+      .doc(id)
+      .set({
+        semId: semId,
+        matId: matId,
+        aulaId: aula.id,
+        aula: aula,
+        turmas: turmas,
+        publicadoEm: new Date().toISOString(),
+        publicadoPor: currentUser ? currentUser.email : "",
+      });
+  }
+
+  function getPublicacoesDaTurma(semId, matId, turmaHash) {
+    // Busca aulas publicadas para esta turma OU para TODAS
+    return db
+      .collection("publicacoes")
+      .where("semId", "==", semId)
+      .where("matId", "==", matId)
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          var d = doc.data();
+          if (
+            d.turmas.indexOf("TODAS") >= 0 ||
+            d.turmas.indexOf(turmaHash) >= 0
+          ) {
+            lista.push(d.aula);
+          }
+        });
+        return lista;
+      });
+  }
+
+  function getTodasPublicacoes(semId, matId) {
+    return db
+      .collection("publicacoes")
+      .where("semId", "==", semId)
+      .where("matId", "==", matId)
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          lista.push(Object.assign({ _docId: doc.id }, doc.data()));
+        });
+        return lista;
+      });
+  }
+
+  function reutilizarPublicacao(docId, novasTurmas) {
+    // Copia publicação existente para novas turmas
+    return db
+      .collection("publicacoes")
+      .doc(docId)
+      .get()
+      .then(function (snap) {
+        if (!snap.exists) throw new Error("Publicação não encontrada");
+        var d = snap.data();
+        var turmasMerge = d.turmas
+          .concat(novasTurmas)
+          .filter(function (t, i, arr) {
+            return arr.indexOf(t) === i;
+          });
+        if (turmasMerge.indexOf("TODAS") >= 0) turmasMerge = ["TODAS"];
+        return db.collection("publicacoes").doc(docId).update({
+          turmas: turmasMerge,
+          atualizadoEm: new Date().toISOString(),
+        });
+      });
+  }
+
+  function excluirAlunos(uids) {
+    var batch = db.batch();
+    uids.forEach(function (uid) {
+      batch.delete(db.collection("alunos").doc(uid));
+    });
+    return batch.commit();
+  }
+
   return {
     init: init,
     loginGoogle: loginGoogle,
@@ -258,5 +505,20 @@ var FB = (function () {
     saveCronograma: saveCronograma,
     getConfig: getConfig,
     saveConfig: saveConfig,
+    registrarAluno: registrarAluno,
+    registrarAlunoNaTurma: registrarAlunoNaTurma,
+    getAluno: getAluno,
+    getAlunos: getAlunos,
+    setSemestreAluno: setSemestreAluno,
+    setAtivoAluno: setAtivoAluno,
+    excluirAlunos: excluirAlunos,
+    getTurma: getTurma,
+    getAlertas: getAlertas,
+    marcarAlertaVisto: marcarAlertaVisto,
+    publicarAula: publicarAula,
+    getPublicacoesDaTurma: getPublicacoesDaTurma,
+    getTodasPublicacoes: getTodasPublicacoes,
+    reutilizarPublicacao: reutilizarPublicacao,
+    LIMITE_TURMA: LIMITE_TURMA,
   };
 })();

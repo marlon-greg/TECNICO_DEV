@@ -151,6 +151,13 @@
             </button>
             <button
               class="btn admin-only"
+              onclick="App.publicarAulaAtual()"
+              title="Publicar para turmas"
+            >
+              &#127775; Publicar
+            </button>
+            <button
+              class="btn admin-only"
               id="btn-delete-lesson"
               onclick="App.deleteLesson()"
             >
@@ -622,6 +629,116 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     </script>
+    <!-- ═══════════════════════════════════════
+     MODAL: GESTÃO DE ALUNOS (ADMIN)
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-students">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128100; Gestão de Alunos</h3>
+            <p>Gerencie semestres e acesso dos alunos</p>
+          </div>
+          <div style="display: flex; gap: 0.4rem; align-items: center">
+            <button
+              class="btn btn-ghost"
+              onclick="Students.refresh()"
+              title="Atualizar lista"
+            >
+              &#8635;
+            </button>
+            <button class="btn btn-x" onclick="Students.close()">
+              &#x2715;
+            </button>
+          </div>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto">
+          <div class="students-bulk-bar">
+            <label
+              style="
+                font-size: 0.75rem;
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                onchange="Students.selecionarTodos(this)"
+              />
+              Selecionar todos
+            </label>
+            <button
+              class="btn-sm danger-sm"
+              onclick="Students.excluirSelecionados()"
+            >
+              &#128465; Excluir selecionados
+            </button>
+          </div>
+          <div id="students-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+     MODAL: PUBLICAR AULA POR TURMA
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-publicar">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#127775; Publicar Aula</h3>
+            <p id="pub-aula-nome"></p>
+          </div>
+          <button class="btn btn-x" onclick="Turmas.fecharPublicar()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Selecione as turmas de destino</label>
+            <div id="pub-turmas-lista" class="turmas-check-container"></div>
+          </div>
+          <div class="editor-actions" style="margin: 0.8rem 0">
+            <button class="btn btn-red" onclick="Turmas.confirmarPublicacao()">
+              &#127775; Publicar agora
+            </button>
+            <button class="btn" onclick="Turmas.fecharPublicar()">
+              Cancelar
+            </button>
+          </div>
+
+          <div class="mat-form-section" style="margin-top: 0.5rem">
+            <div class="mat-form-title">
+              &#8635; Reutilizar publicação anterior
+            </div>
+            <div id="pub-reutilizar-lista"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+     MODAL: ALERTAS
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-alertas">
+      <div class="modal modal-sm">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#128276; Alertas</h3>
+            <p>Tentativas de acesso e avisos do sistema</p>
+          </div>
+          <button class="btn btn-x" onclick="Turmas.fecharAlertas()">
+            &#x2715;
+          </button>
+        </div>
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto">
+          <div id="alertas-lista"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -651,6 +768,8 @@
     <script src="assets/js/linkmanager.js"></script>
     <script src="assets/js/schedule.js"></script>
     <script src="assets/js/extras.js"></script>
+    <script src="assets/js/students.js"></script>
+    <script src="assets/js/turmas.js"></script>
     <script src="assets/js/app.js"></script>
     <script src="assets/js/accessibility.js"></script>
   </body>

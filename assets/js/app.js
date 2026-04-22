@@ -1,24 +1,20 @@
 // =======================================================
-//  app.js — LÓGICA PRINCIPAL
-//  Não edite este arquivo para adicionar conteúdo.
-//  Edite apenas o data.js.
+//  app.js
 // =======================================================
 
 var App = (function () {
-  // ── ESTADO ────────────────────────────────────────────
   var state = null;
   var openMap = {};
   var curLesson = null;
   var curSemId = null;
   var curMatId = null;
-  var isViewer = false; // modo aluno (sem edição)
-  var maxSemester = null; // semestre máximo visível (?sem=N)
+  var isViewer = false;
+  var maxSemester = null;
+  var alunoTurmaHash = null;
   var STORAGE_KEY = "curso_dev_v3";
 
-  // ── MODO ALUNO / ADMIN ────────────────────────────────
-
-  function detectMode(resolvedLink, role) {
-    // Aluno via link hash
+  function detectMode(resolvedLink) {
+    var params = new URLSearchParams(window.location.search);
     if (resolvedLink) {
       isViewer = true;
       maxSemester = resolvedLink.sem;
@@ -27,21 +23,6 @@ var App = (function () {
         "Visualizando até o " + maxSemester + "º Semestre";
       return;
     }
-    // Aluno logado Google
-    if (role === "aluno") {
-      isViewer = true;
-      maxSemester = 4;
-      document.body.classList.add("viewer-mode");
-      document.getElementById("header-sub").textContent = "Modo Aluno";
-      return;
-    }
-    // Admin
-    if (role === "admin") {
-      isViewer = false;
-      return;
-    }
-    // Legado ?sem=N
-    var params = new URLSearchParams(window.location.search);
     if (params.has("sem")) {
       isViewer = true;
       maxSemester = parseInt(params.get("sem"), 10) || 1;
@@ -51,16 +32,12 @@ var App = (function () {
     }
   }
 
-  // ── PERSISTÊNCIA ──────────────────────────────────────
-
   function loadState() {
     try {
       var saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        state = JSON.parse(saved);
-      } else {
-        state = JSON.parse(JSON.stringify(CURSO_DATA));
-      }
+      state = saved
+        ? JSON.parse(saved)
+        : JSON.parse(JSON.stringify(CURSO_DATA));
     } catch (e) {
       state = JSON.parse(JSON.stringify(CURSO_DATA));
     }
@@ -70,26 +47,13 @@ var App = (function () {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {}
-    // Sincroniza com Firebase se admin logado
-    if (FB && FB.isDocente()) {
-      syncToFirebase();
-    }
   }
 
-  function syncToFirebase() {
-    if (!state || !FB.isDocente()) return;
-    state.semestres.forEach(function (sem) {
-      sem.materias.forEach(function (mat) {
-        if (mat.aulas && mat.aulas.length > 0) {
-          FB.saveAulas(sem.id, mat.id, mat.aulas).catch(function (e) {
-            console.warn("Firebase sync error:", e);
-          });
-        }
-      });
-    });
+  function saveMatToFirestore(semId, matId) {
+    if (!window.FIREBASE_CONFIG || !FB.isDocente()) return;
+    var mat = findMat(semId, matId);
+    if (mat) FB.saveAulas(semId, matId, mat.aulas).catch(function () {});
   }
-
-  // ── HELPERS ───────────────────────────────────────────
 
   function findSem(semId) {
     return state.semestres.find(function (s) {
@@ -97,28 +61,25 @@ var App = (function () {
     });
   }
   function findMat(semId, matId) {
-    var sem = findSem(semId);
-    return sem
-      ? sem.materias.find(function (m) {
+    var s = findSem(semId);
+    return s
+      ? s.materias.find(function (m) {
           return m.id === matId;
         })
       : null;
   }
-  function findLesson(semId, matId, lessonId) {
-    var mat = findMat(semId, matId);
-    return mat
-      ? mat.aulas.find(function (a) {
-          return a.id === lessonId;
+  function findLesson(semId, matId, lid) {
+    var m = findMat(semId, matId);
+    return m
+      ? m.aulas.find(function (a) {
+          return a.id === lid;
         })
       : null;
   }
 
-  // ── RENDER ────────────────────────────────────────────
-
   function render() {
     var html = "";
     state.semestres.forEach(function (sem, idx) {
-      // Modo aluno: esconde semestres acima do limite
       if (isViewer && maxSemester !== null && idx + 1 > maxSemester) return;
       html += renderSemester(sem);
     });
@@ -146,8 +107,8 @@ var App = (function () {
       sem.id +
       '">' +
       sem.materias
-        .map(function (mat) {
-          return renderMat(sem.id, mat);
+        .map(function (m) {
+          return renderMat(sem.id, m);
         })
         .join("") +
       "</div>" +
@@ -156,46 +117,27 @@ var App = (function () {
   }
 
   function renderMat(semId, mat) {
-    var key = semId + "-" + mat.id;
-    var open = !!openMap[key];
-
-    // Aulas visíveis (modo aluno) vs todas (admin)
+    var key = semId + "-" + mat.id,
+      open = !!openMap[key];
     var todasAulas = mat.aulas;
-    var aulasVisiveis = isViewer
+    var aulasVis = isViewer
       ? todasAulas.filter(function (a) {
           return !Schedule.isOculta(semId, mat.id, a.id);
         })
       : todasAulas;
-    var done = aulasVisiveis.filter(function (a) {
+    var done = aulasVis.filter(function (a) {
       return a.status === "completa";
     }).length;
-    var total = aulasVisiveis.length;
+    var total = aulasVis.length;
     var pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    // Previsão de cronograma
     var prev = Schedule.getPrevisao(mat.id, mat.ch);
-
-    // Badge de aulas ocultas (só admin)
     var ocultasCount = todasAulas.filter(function (a) {
       return Schedule.isOculta(semId, mat.id, a.id);
     }).length;
 
-    // Continuação: calcula progresso unificado se tiver ch_total
-    var chTotal = mat.ch_total || mat.ch;
-    var contDe = mat.continuacao_de || null;
-    var isCont = !!contDe;
-    var partLabel = "";
-    if (isCont) {
-      partLabel = "Parte 2";
-    } else if (mat.ch_total && mat.ch_total !== mat.ch) {
-      partLabel = "Parte 1";
-    }
-
-    // Progresso unificado: busca aulas concluídas da parte irmã também
-    var doneTotal = done;
-    var totalAulas = total;
+    var doneTotal = done,
+      totalAulas = total;
     if (mat.ch_total) {
-      // Procura matéria irmã no state
       var allMats = [];
       (state || { semestres: [] }).semestres.forEach(function (s) {
         s.materias.forEach(function (m) {
@@ -225,10 +167,18 @@ var App = (function () {
     }
     var pctTotal =
       totalAulas > 0 ? Math.round((doneTotal / totalAulas) * 100) : 0;
+    var isCont = !!mat.continuacao_de;
+    var partLabel = isCont
+      ? "Parte " + (mat.parte_num || 2)
+      : mat.ch_total && mat.ch_total !== mat.ch
+        ? "Parte 1"
+        : "";
 
     var html =
       '<div class="subject-item' +
-      (isCont ? ' subject-continuation" data-cont-de="' + contDe + '"' : '"') +
+      (isCont
+        ? ' subject-continuation" data-cont-de="' + mat.continuacao_de + '"'
+        : '"') +
       ">" +
       (isCont ? '<div class="cont-connector"></div>' : "") +
       '<div class="subject-header" onclick="App.toggleMat(\'' +
@@ -254,7 +204,7 @@ var App = (function () {
       (mat.ch_total && mat.ch_total !== mat.ch
         ? ' <span class="ch-total">/ ' + mat.ch_total + " total</span>"
         : "") +
-      "</span>" +
+      " </span>" +
       "<span>" +
       total +
       " aulas</span>" +
@@ -276,7 +226,6 @@ var App = (function () {
       (open ? " open" : "") +
       '">&#9654;</span>' +
       "</div>" +
-      // Barra de progresso (sempre visível se há aulas)
       (total > 0
         ? '<div class="progress-wrap">' +
           '<div class="progress-bar"><div class="progress-fill" style="width:' +
@@ -284,7 +233,7 @@ var App = (function () {
           '%"></div></div>' +
           '<span class="progress-label">' +
           pct +
-          "% esta parte</span>" +
+          "% concluído</span>" +
           (mat.ch_total && mat.ch_total !== mat.ch && totalAulas > total
             ? '<span class="progress-label-total">(' +
               pctTotal +
@@ -300,8 +249,6 @@ var App = (function () {
 
     if (open) {
       html += '<div class="lessons-list">';
-
-      // Botões de controle admin
       if (!isViewer) {
         html +=
           '<div class="lesson-bulk-actions">' +
@@ -333,8 +280,7 @@ var App = (function () {
               semId +
               "','" +
               mat.id +
-              "');App.render()\">&#128564; Ocultar tudo</button>" +
-              '<button class="btn-sm" onclick="Schedule.mostrarTodas(\'' +
+              '\');App.render()">&#128564; Ocultar tudo</button><button class="btn-sm" onclick="Schedule.mostrarTodas(\'' +
               semId +
               "','" +
               mat.id +
@@ -342,38 +288,27 @@ var App = (function () {
             : "") +
           "</div>";
       }
-      // Modo aluno: mostra badge de materiais complementares
-      if (isViewer) {
-        var matBadge = Materials.getBadge(semId, mat.id);
-        if (matBadge) {
-          html +=
-            '<div class="mat-badge-row" onclick="Materials.open(\'' +
-            semId +
-            "','" +
-            mat.id +
-            "','" +
-            mat.nome +
-            "')\">" +
-            matBadge +
-            " Materiais complementares</div>";
-        }
+      if (isViewer && Materials.getBadge(semId, mat.id)) {
+        html +=
+          '<div class="mat-badge-row" onclick="Materials.open(\'' +
+          semId +
+          "','" +
+          mat.id +
+          "','" +
+          mat.nome +
+          "')\">&#128279; Materiais complementares</div>";
       }
-
-      if (aulasVisiveis.length === 0 && todasAulas.length === 0) {
+      if (aulasVis.length === 0 && todasAulas.length === 0) {
         html += '<div class="empty-msg">Nenhuma aula cadastrada ainda.</div>';
-      } else if (aulasVisiveis.length === 0 && isViewer) {
+      } else if (aulasVis.length === 0 && isViewer) {
         html +=
           '<div class="empty-msg">Nenhuma aula disponível no momento.</div>';
       } else {
-        // Admin: mostra todas com indicador de oculta
-        // Aluno: mostra só visíveis
-        var listaRender = isViewer ? aulasVisiveis : todasAulas;
-        listaRender.forEach(function (aula, i) {
-          var oculta = Schedule.isOculta(semId, mat.id, aula.id);
-          var classes = "lesson-item" + (oculta ? " lesson-hidden" : "");
+        (isViewer ? aulasVis : todasAulas).forEach(function (aula, i) {
+          var oc = Schedule.isOculta(semId, mat.id, aula.id);
           html +=
-            '<div class="' +
-            classes +
+            '<div class="lesson-item' +
+            (oc ? " lesson-hidden" : "") +
             '" onclick="App.openLesson(\'' +
             semId +
             "','" +
@@ -388,14 +323,14 @@ var App = (function () {
             "</div>" +
             '<span class="l-title">' +
             aula.titulo +
-            (oculta ? ' <span class="oculta-tag">oculta</span>' : "") +
-            "</span>" +
+            (oc ? ' <span class="oculta-tag">oculta</span>' : "") +
+            " </span>" +
             '<span class="l-status">' +
             (aula.status === "completa" ? "&#10003; Completa" : "Em breve") +
             "</span>" +
             '<div class="lesson-actions admin-only" onclick="event.stopPropagation()">' +
             '<button class="btn-icon" title="' +
-            (oculta ? "Mostrar" : "Ocultar") +
+            (oc ? "Mostrar" : "Ocultar") +
             '" onclick="Schedule.toggleOculta(\'' +
             semId +
             "','" +
@@ -403,7 +338,7 @@ var App = (function () {
             "','" +
             aula.id +
             "');App.render()\">" +
-            (oculta ? "&#128065;" : "&#128564;") +
+            (oc ? "&#128065;" : "&#128564;") +
             "</button>" +
             '<button class="btn-icon" title="Editar" onclick="App.editLesson(\'' +
             semId +
@@ -419,8 +354,7 @@ var App = (function () {
             "','" +
             aula.id +
             "')\">&#128465;</button>" +
-            "</div>" +
-            "</div>";
+            "</div></div>";
         });
       }
       html +=
@@ -431,52 +365,38 @@ var App = (function () {
         "')\">+ Adicionar aula</button>";
       html += "</div>";
     }
-    html += "</div>";
-    return html;
+    return html + "</div>";
   }
-
-  // ── NAVEGAÇÃO ─────────────────────────────────────────
 
   function toggleSem(id) {
     var el = document.getElementById("sem-" + id);
     if (el) el.style.display = el.style.display === "none" ? "" : "none";
   }
-
   function toggleMat(semId, matId) {
-    var key = semId + "-" + matId;
-    openMap[key] = !openMap[key];
+    openMap[semId + "-" + matId] = !openMap[semId + "-" + matId];
     render();
   }
 
-  // ── MODAL: ABRIR AULA ─────────────────────────────────
-
   function openLesson(semId, matId, lessonId) {
-    var lesson = findLesson(semId, matId, lessonId);
-    var mat = findMat(semId, matId);
+    var lesson = findLesson(semId, matId, lessonId),
+      mat = findMat(semId, matId);
     if (!lesson || !mat) return;
-
     curLesson = lesson;
     curSemId = semId;
     curMatId = matId;
-
     document.getElementById("m-title").textContent = lesson.titulo;
     document.getElementById("m-sub").textContent = mat.nome;
-
     document.getElementById("pane-content").innerHTML = marked.parse(
       lesson.conteudo || "_Sem conteúdo ainda._",
     );
-
     document.getElementById("pane-notes").innerHTML = lesson.notas
       ? marked.parse(lesson.notas)
       : '<p style="color:var(--text-faint);font-style:italic">Sem notas do professor.</p>';
-
     document.getElementById("json-ed").value = JSON.stringify(lesson, null, 2);
-
     switchTab("content");
     document.getElementById("overlay").classList.add("open");
   }
 
-  // Abre direto na aba de edição
   function editLesson(semId, matId, lessonId) {
     openLesson(semId, matId, lessonId);
     switchTab("raw");
@@ -499,8 +419,6 @@ var App = (function () {
     });
   }
 
-  // ── EDITAR / SALVAR JSON ──────────────────────────────
-
   function saveEdit() {
     try {
       var updated = JSON.parse(document.getElementById("json-ed").value);
@@ -511,7 +429,6 @@ var App = (function () {
       mat.aulas[idx] = updated;
       curLesson = updated;
       saveState();
-      saveMatToFirestore(curSemId, curMatId);
       document.getElementById("pane-content").innerHTML = marked.parse(
         updated.conteudo || "",
       );
@@ -520,14 +437,12 @@ var App = (function () {
         : '<p style="color:var(--text-faint);font-style:italic">Sem notas.</p>';
       document.getElementById("m-title").textContent = updated.titulo;
       switchTab("content");
-      toast("Aula salva com sucesso!");
+      toast("Aula salva! Use Publicar para enviar às turmas.");
       render();
     } catch (e) {
       toast("JSON inválido. Verifique a sintaxe.");
     }
   }
-
-  // ── EXCLUIR AULA ──────────────────────────────────────
 
   function confirmDelete(semId, matId, lessonId) {
     var lesson = findLesson(semId, matId, lessonId);
@@ -556,77 +471,52 @@ var App = (function () {
     closeModal();
   }
 
-  // ── ADICIONAR AULA ────────────────────────────────────
-
   function addLesson(semId, matId) {
     var mat = findMat(semId, matId);
     if (!mat) return;
-    var n = mat.aulas.length + 1;
-    var id = matId + "-a" + String(n).padStart(2, "0");
-    var nova = {
+    var n = mat.aulas.length + 1,
+      id = matId + "-a" + String(n).padStart(2, "0");
+    mat.aulas.push({
       id: id,
       titulo: "Aula " + n + " — Novo Título",
       status: "em-breve",
       conteudo: "# Aula " + n + "\n\nConteúdo a ser preenchido.",
       notas: "",
-    };
-    mat.aulas.push(nova);
+    });
     saveState();
-    saveMatToFirestore(semId, matId);
     render();
     editLesson(semId, matId, id);
-    toast("Aula criada! Edite o conteúdo abaixo.");
+    toast("Aula criada! Edite o conteúdo e depois clique em Publicar.");
   }
 
-  // ── PDF ───────────────────────────────────────────────
+  function publicarAulaAtual() {
+    if (!curLesson || !curSemId || !curMatId) return;
+    closeModal();
+    Turmas.abrirPublicar(curSemId, curMatId, curLesson.id);
+  }
+  function abrirCronograma(semId, matId, matNome, matCh) {
+    Schedule.openCronogramaModal(semId, matId, matNome, matCh);
+  }
 
   function printLesson() {
     if (!curLesson) return;
-    var mat = findMat(curSemId, curMatId);
-    var w = window.open("", "_blank");
-
-    var css = [
-      "body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:1rem;color:#222;line-height:1.7}",
-      "h1{font-size:1.5rem;color:#1a1a2e;border-bottom:3px solid #c8102e;padding-bottom:.5rem;margin-bottom:1.5rem}",
-      "h2{font-size:1.1rem;color:#1a1a2e;margin:1.2rem 0 .4rem;border-bottom:1px solid #eee;padding-bottom:.2rem}",
-      "h3{font-size:1rem;margin:.9rem 0 .3rem}p{margin-bottom:.6rem;font-size:.9rem}",
-      "ul,ol{margin:.4rem 0 .6rem 1.4rem}li{margin-bottom:.25rem;font-size:.9rem}",
-      "pre{background:#1e1e2e;color:#cdd6f4;padding:.9rem;border-radius:6px;overflow-x:auto;font-size:.8rem;line-height:1.5}",
-      "code{background:#f0f0f0;padding:.1rem .3rem;border-radius:3px;font-size:.82rem}",
-      "pre code{background:none;padding:0}",
-      "blockquote{border-left:3px solid #c8102e;padding:.4rem .9rem;background:#fff8f8;margin:.6rem 0;border-radius:0 6px 6px 0}",
-      "table{width:100%;border-collapse:collapse;font-size:.85rem}",
-      "th{background:#1a1a2e;color:#fff;padding:.4rem .6rem;text-align:left}",
-      "td{padding:.35rem .6rem;border-bottom:1px solid #eee}",
-      ".hd{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid #1a1a2e}",
-      ".badge{background:#c8102e;color:#fff;padding:.3rem .8rem;border-radius:4px;font-weight:700;font-size:.85rem}",
-      "@media print{body{margin:.5rem}}",
-    ].join("");
-
-    var html = [
-      '<!DOCTYPE html><html><head><meta charset="UTF-8">',
-      "<title>" + curLesson.titulo + "</title>",
-      '<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"><\/script>',
-      "<style>" + css + "</style></head><body>",
-      '<div class="hd">',
-      '<div class="badge">SENAI</div>',
-      "<div><strong>" + (mat ? mat.nome : "") + "</strong><br>",
-      "<small>Técnico em Desenvolvimento de Sistemas</small></div>",
-      "</div>",
-      '<div id="c"></div>',
-      "<script>",
-      "document.getElementById('c').innerHTML=marked.parse(" +
+    var mat = findMat(curSemId, curMatId),
+      w = window.open("", "_blank");
+    var css =
+      "body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:1rem;color:#222;line-height:1.7}h1{font-size:1.5rem;color:#1a1a2e;border-bottom:3px solid #c8102e;padding-bottom:.5rem;margin-bottom:1.5rem}h2{font-size:1.1rem;color:#1a1a2e;margin:1.2rem 0 .4rem}h3{font-size:1rem;margin:.9rem 0 .3rem}p{margin-bottom:.6rem;font-size:.9rem}ul,ol{margin:.4rem 0 .6rem 1.4rem}li{margin-bottom:.25rem;font-size:.9rem}pre{background:#1e1e2e;color:#cdd6f4;padding:.9rem;border-radius:6px;overflow-x:auto;font-size:.8rem}code{background:#f0f0f0;padding:.1rem .3rem;border-radius:3px;font-size:.82rem}pre code{background:none;padding:0}blockquote{border-left:3px solid #c8102e;padding:.4rem .9rem;background:#fff8f8;margin:.6rem 0}table{width:100%;border-collapse:collapse;font-size:.85rem}th{background:#1a1a2e;color:#fff;padding:.4rem .6rem;text-align:left}td{padding:.35rem .6rem;border-bottom:1px solid #eee}.hd{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid #1a1a2e}.badge{background:#c8102e;color:#fff;padding:.3rem .8rem;border-radius:4px;font-weight:700;font-size:.85rem}@media print{body{margin:.5rem}}";
+    w.document.write(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' +
+        curLesson.titulo +
+        '</title><script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"><\/script><style>' +
+        css +
+        '</style></head><body><div class="hd"><div class="badge">SENAI</div><div><strong>' +
+        (mat ? mat.nome : "") +
+        '</strong><br><small>Técnico em Desenvolvimento de Sistemas</small></div></div><div id="c"></div><script>document.getElementById("c").innerHTML=marked.parse(' +
         JSON.stringify(curLesson.conteudo || "") +
-        ");",
-      "window.onload=function(){window.print();};",
-      "<\/script></body></html>",
-    ].join("");
-
-    w.document.write(html);
+        ");window.onload=function(){window.print()};<\/script></body></html>",
+    );
     w.document.close();
   }
-
-  // ── TOAST ─────────────────────────────────────────────
 
   function toast(msg) {
     var el = document.getElementById("toast");
@@ -637,12 +527,9 @@ var App = (function () {
     }, 2500);
   }
 
-  // ── INIT ──────────────────────────────────────────────
-
   function init() {
     FB.init(function (user) {
       if (!user && window.FIREBASE_CONFIG) {
-        // Firebase configurado mas não logado → tela de login
         FB.showLoginScreen(null);
         return;
       }
@@ -651,37 +538,54 @@ var App = (function () {
   }
 
   function bootApp(user) {
-    // Sem Firebase configurado → modo local, admin direto
     if (!window.FIREBASE_CONFIG) {
       isViewer = false;
-      LinkManager.init(function (resolvedLink) {
-        detectMode(resolvedLink);
+      LinkManager.init(function (r) {
+        detectMode(r);
         finishBoot();
       });
       return;
     }
-
     if (user && FB.isAluno()) {
-      // Aluno logado → precisa de link válido
-      LinkManager.init(function (resolvedLink) {
-        if (!resolvedLink) {
-          FB.showLoginScreen("Acesse pelo link fornecido pelo seu professor.");
-          return;
-        }
-        detectMode(resolvedLink);
-        finishBoot();
-      });
+      var th = window.location.hash.replace("#", "").trim() || null;
+      (th ? FB.registrarAlunoNaTurma(user, th) : FB.registrarAluno(user))
+        .then(function () {
+          return FB.getAluno(user.uid);
+        })
+        .then(function (d) {
+          if (!d || d.ativo === false) {
+            FB.logout();
+            FB.showLoginScreen("Acesso bloqueado. Fale com o professor.");
+            return;
+          }
+          alunoTurmaHash = d.turma || th || null;
+          isViewer = true;
+          maxSemester = d.semestre || 1;
+          document.body.classList.add("viewer-mode");
+          document.getElementById("header-sub").textContent =
+            "Olá, " +
+            (user.displayName ? user.displayName.split(" ")[0] : "Aluno") +
+            " — " +
+            maxSemester +
+            "º Semestre";
+          finishBoot();
+        })
+        .catch(function (err) {
+          if (err.message && err.message.indexOf("LIMITE_TURMA") === 0) {
+            FB.logout();
+            FB.showLoginScreen("Turma lotada. Fale com o professor.");
+            return;
+          }
+          FB.showLoginScreen("Erro ao carregar dados. Tente novamente.");
+        });
       return;
     }
-
-    // Docente → admin completo
     if (user && FB.isDocente()) {
       isViewer = false;
       addUserBadge(user);
     }
-
-    LinkManager.init(function (resolvedLink) {
-      if (!user) detectMode(resolvedLink);
+    LinkManager.init(function (r) {
+      if (!user) detectMode(r);
       finishBoot();
     });
   }
@@ -689,6 +593,7 @@ var App = (function () {
   function finishBoot() {
     Schedule.init();
     Materials.init();
+    if (!isViewer) Turmas.init();
     loadState();
     loadFromFirestore();
     document.getElementById("overlay").addEventListener("click", function (e) {
@@ -706,8 +611,8 @@ var App = (function () {
       render();
       return;
     }
-    var total = 0;
-    var done = 0;
+    var total = 0,
+      done = 0;
     state.semestres.forEach(function (sem) {
       total += sem.materias.length;
     });
@@ -717,10 +622,13 @@ var App = (function () {
     }
     state.semestres.forEach(function (sem) {
       sem.materias.forEach(function (mat) {
-        FB.getAulas(sem.id, mat.id)
-          .then(function (aulas) {
-            if (aulas.length > 0) mat.aulas = aulas;
-          })
+        var p =
+          isViewer && alunoTurmaHash
+            ? FB.getPublicacoesDaTurma(sem.id, mat.id, alunoTurmaHash)
+            : FB.getAulas(sem.id, mat.id);
+        p.then(function (a) {
+          if (a && a.length > 0) mat.aulas = a;
+        })
           .catch(function () {})
           .finally(function () {
             done++;
@@ -731,11 +639,11 @@ var App = (function () {
   }
 
   function addUserBadge(user) {
-    var header = document.getElementById("admin-header-actions");
-    if (!header) return;
-    var badge = document.createElement("div");
-    badge.className = "user-badge";
-    badge.innerHTML =
+    var h = document.getElementById("admin-header-actions");
+    if (!h) return;
+    var b = document.createElement("div");
+    b.className = "user-badge";
+    b.innerHTML =
       (user.photoURL
         ? '<img src="' +
           user.photoURL +
@@ -745,19 +653,17 @@ var App = (function () {
       (user.displayName || user.email) +
       "</span>" +
       '<button onclick="FB.logout()" class="btn btn-ghost" style="font-size:.7rem;padding:.2rem .5rem">Sair</button>';
-    header.appendChild(badge);
+    h.appendChild(b);
   }
 
-  // ── ABRIR CRONOGRAMA ──────────────────────────────────
-
-  function abrirCronograma(semId, matId, matNome, matCh) {
-    Schedule.openCronogramaModal(semId, matId, matNome, matCh);
+  function getAlunoTurma() {
+    return alunoTurmaHash;
   }
 
-  // ── API PÚBLICA ───────────────────────────────────────
   return {
     init: init,
     abrirCronograma: abrirCronograma,
+    publicarAulaAtual: publicarAulaAtual,
     toggleSem: toggleSem,
     toggleMat: toggleMat,
     openLesson: openLesson,
@@ -778,78 +684,65 @@ var App = (function () {
     isViewer: function () {
       return isViewer;
     },
-    setViewer: function (v) {
-      isViewer = v;
-    },
+    getAlunoTurma: getAlunoTurma,
   };
 })();
 
-// ── ADMIN PANEL (mover matéria) ───────────────────────
-
 var AdminPanel = (function () {
   function openMoveModal() {
-    var state = App.getState();
-    var matSel = document.getElementById("move-mat-select");
-    var semSel = document.getElementById("move-sem-select");
-    matSel.innerHTML = "";
-    semSel.innerHTML = "";
-
-    state.semestres.forEach(function (sem) {
+    var s = App.getState(),
+      ms = document.getElementById("move-mat-select"),
+      ss = document.getElementById("move-sem-select");
+    ms.innerHTML = "";
+    ss.innerHTML = "";
+    s.semestres.forEach(function (sem) {
       sem.materias.forEach(function (mat) {
-        var opt = document.createElement("option");
-        opt.value = sem.id + "|" + mat.id;
-        opt.textContent = mat.nome + " (" + sem.titulo + ")";
-        matSel.appendChild(opt);
+        var o = document.createElement("option");
+        o.value = sem.id + "|" + mat.id;
+        o.textContent = mat.nome + " (" + sem.titulo + ")";
+        ms.appendChild(o);
       });
+      var o = document.createElement("option");
+      o.value = sem.id;
+      o.textContent = sem.titulo + " — " + sem.sub;
+      ss.appendChild(o);
     });
-
-    state.semestres.forEach(function (sem) {
-      var opt = document.createElement("option");
-      opt.value = sem.id;
-      opt.textContent = sem.titulo + " — " + sem.sub;
-      semSel.appendChild(opt);
-    });
-
     document.getElementById("overlay-move").classList.add("open");
   }
-
   function closeMoveModal() {
     document.getElementById("overlay-move").classList.remove("open");
   }
-
   function confirmMove() {
-    var matVal = document.getElementById("move-mat-select").value;
-    var destSem = document.getElementById("move-sem-select").value;
-    if (!matVal || !destSem) return;
-
-    var parts = matVal.split("|");
-    var srcSem = parts[0];
-    var matId = parts[1];
-
-    if (srcSem === destSem) {
+    var mv = document.getElementById("move-mat-select").value,
+      ds = document.getElementById("move-sem-select").value;
+    if (!mv || !ds) return;
+    var p = mv.split("|"),
+      ss = p[0],
+      mi = p[1];
+    if (ss === ds) {
       App.toast("A matéria já está nesse semestre.");
       return;
     }
-
-    var state = App.getState();
-    var src = state.semestres.find(function (s) {
-      return s.id === srcSem;
-    });
-    var dest = state.semestres.find(function (s) {
-      return s.id === destSem;
-    });
-    var matIdx = src.materias.findIndex(function (m) {
-      return m.id === matId;
-    });
-    var mat = src.materias.splice(matIdx, 1)[0];
-    dest.materias.push(mat);
-
+    var s = App.getState(),
+      src = s.semestres.find(function (x) {
+        return x.id === ss;
+      }),
+      dest = s.semestres.find(function (x) {
+        return x.id === ds;
+      });
+    dest.materias.push(
+      src.materias.splice(
+        src.materias.findIndex(function (m) {
+          return m.id === mi;
+        }),
+        1,
+      )[0],
+    );
     App.saveState();
     App.render();
     closeMoveModal();
     App.toast("Matéria movida para " + dest.titulo + "!");
   }
-
   return {
     openMoveModal: openMoveModal,
     closeMoveModal: closeMoveModal,
@@ -857,19 +750,16 @@ var AdminPanel = (function () {
   };
 })();
 
-// Inicializa — aguarda firebase-config.js carregar (async), com fallback de 2s
 document.addEventListener("DOMContentLoaded", function () {
-  var waited = 0;
-  var interval = setInterval(function () {
-    waited += 50;
-    // FIREBASE_CONFIG definido (mesmo null) = config tentou carregar
-    var configReady = Object.prototype.hasOwnProperty.call(
-      window,
-      "FIREBASE_CONFIG",
-    );
-    if (configReady || waited >= 2000) {
-      clearInterval(interval);
-      App.init();
-    }
-  }, 50);
+  var waited = 0,
+    iv = setInterval(function () {
+      waited += 50;
+      if (
+        Object.prototype.hasOwnProperty.call(window, "FIREBASE_CONFIG") ||
+        waited >= 2000
+      ) {
+        clearInterval(iv);
+        App.init();
+      }
+    }, 50);
 });
