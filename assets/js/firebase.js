@@ -49,6 +49,8 @@ var FB = (function () {
   function detectRole(email) {
     if (!email) return null;
     if (email.endsWith(DOCENTE_DOMAIN)) return "docente";
+    var extraDocentes = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.docenteEmails) || [];
+    if (extraDocentes.indexOf(email) >= 0) return "docente";
     for (var i = 0; i < ALUNO_DOMAINS.length; i++) {
       if (email.endsWith(ALUNO_DOMAINS[i])) return "aluno";
     }

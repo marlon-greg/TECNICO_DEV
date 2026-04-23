@@ -113,6 +113,7 @@ var Students = (function () {
       'data-uid="' +
       a.uid +
       '">' +
+      '<input type="checkbox" class="student-cb" value="' + a.uid + '" style="margin-right:.3rem;flex-shrink:0">' +
       '<div class="student-foto">' +
       (a.foto
         ? '<img src="' +
@@ -196,6 +197,37 @@ var Students = (function () {
 
   function refresh() {
     load();
+  }
+
+  function selecionarTodos(cb) {
+    document.querySelectorAll(".student-cb").forEach(function (el) {
+      el.checked = cb.checked;
+    });
+  }
+
+  function excluirSelecionados() {
+    var selecionados = [];
+    document.querySelectorAll(".student-cb:checked").forEach(function (el) {
+      selecionados.push(el.value);
+    });
+    if (selecionados.length === 0) {
+      App.toast("Selecione ao menos um aluno.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Excluir " + selecionados.length + " aluno(s)? Essa ação não pode ser desfeita."
+      )
+    )
+      return;
+    FB.excluirAlunos(selecionados)
+      .then(function () {
+        App.toast(selecionados.length + " aluno(s) excluído(s).");
+        load();
+      })
+      .catch(function () {
+        App.toast("Erro ao excluir alunos.");
+      });
   }
 
   return {
