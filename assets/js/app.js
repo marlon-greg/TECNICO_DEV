@@ -429,6 +429,7 @@ var App = (function () {
       mat.aulas[idx] = updated;
       curLesson = updated;
       saveState();
+      saveMatToFirestore(curSemId, curMatId);
       document.getElementById("pane-content").innerHTML = marked.parse(
         updated.conteudo || "",
       );
@@ -484,6 +485,7 @@ var App = (function () {
       notas: "",
     });
     saveState();
+    saveMatToFirestore(semId, matId);
     render();
     editLesson(semId, matId, id);
     toast("Aula criada! Edite o conteúdo e depois clique em Publicar.");

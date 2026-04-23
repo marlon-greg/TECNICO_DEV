@@ -15,15 +15,9 @@ var Turmas = (function () {
   function abrirPublicar(semId, matId, aulaId) {
     var state = App.getState();
     var mat = state.semestres
-      .find(function (s) {
-        return s.id === semId;
-      })
-      .materias.find(function (m) {
-        return m.id === matId;
-      });
-    var aula = mat.aulas.find(function (a) {
-      return a.id === aulaId;
-    });
+      .find(function (s) { return s.id === semId; })
+      .materias.find(function (m) { return m.id === matId; });
+    var aula = mat.aulas.find(function (a) { return a.id === aulaId; });
     if (!aula) return;
 
     pubSemId = semId;
@@ -31,9 +25,15 @@ var Turmas = (function () {
     pubAula = aula;
 
     document.getElementById("pub-aula-nome").textContent = aula.titulo;
-    renderTurmasCheckboxes();
-    renderPublicacoesExistentes();
     document.getElementById("overlay-publicar").classList.add("open");
+
+    FB.getPublicacaoAula(semId, matId, aulaId)
+      .then(function (pub) {
+        renderTurmasCheckboxes(pub ? pub.turmas : []);
+      })
+      .catch(function () {
+        renderTurmasCheckboxes([]);
+      });
   }
 
   function fecharPublicar() {
@@ -41,40 +41,59 @@ var Turmas = (function () {
     pubSemId = pubMatId = pubAula = null;
   }
 
-  function renderTurmasCheckboxes() {
-    var links = LinkManager.getActiveLinks();
+  function renderTurmasCheckboxes(turmasAtivas) {
     var container = document.getElementById("pub-turmas-lista");
+    container.innerHTML = '<p class="empty-msg">Carregando turmas...</p>';
 
-    if (links.length === 0) {
-      container.innerHTML =
-        '<p class="empty-msg">Nenhuma turma ativa. Gere links primeiro.</p>';
-      return;
-    }
+    FB.getTurmasConfig()
+      .then(function (lista) {
+        var ativas = lista.filter(function (t) {
+          return t.linkAtivo && t.hash;
+        });
 
-    var html =
-      '<label class="turma-check-item turma-todas">' +
-      '<input type="checkbox" id="pub-todas" onchange="Turmas.toggleTodas(this)">' +
-      '<span class="turma-check-label">&#127775; TODAS AS TURMAS</span>' +
-      "</label>";
+        if (ativas.length === 0) {
+          container.innerHTML =
+            '<p class="empty-msg">Nenhuma turma ativa. Crie turmas primeiro.</p>';
+          return;
+        }
 
-    links.forEach(function (l) {
-      html +=
-        '<label class="turma-check-item">' +
-        '<input type="checkbox" class="pub-turma-cb" value="' +
-        l.hash +
-        '">' +
-        '<span class="turma-check-label">' +
-        "<strong>" +
-        l.label +
-        "</strong>" +
-        ' <span class="link-sem-badge">' +
-        l.sem +
-        "º Sem</span>" +
-        "</span>" +
-        "</label>";
-    });
+        var todasChecked = turmasAtivas.indexOf("TODAS") >= 0;
 
-    container.innerHTML = html;
+        var html =
+          '<label class="turma-check-item turma-todas">' +
+          '<input type="checkbox" id="pub-todas"' +
+          (todasChecked ? " checked" : "") +
+          ' onchange="Turmas.toggleTodas(this)">' +
+          '<span class="turma-check-label">&#127775; TODAS AS TURMAS</span>' +
+          "</label>";
+
+        ativas.forEach(function (t) {
+          var checked = todasChecked || turmasAtivas.indexOf(t.hash) >= 0;
+          html +=
+            '<label class="turma-check-item">' +
+            '<input type="checkbox" class="pub-turma-cb" value="' +
+            t.hash +
+            '"' +
+            (checked ? " checked" : "") +
+            (todasChecked ? " disabled" : "") +
+            ">" +
+            '<span class="turma-check-label">' +
+            "<strong>" +
+            t.nome +
+            "</strong>" +
+            ' <span class="link-sem-badge">' +
+            t.semestre +
+            "º Sem</span>" +
+            "</span>" +
+            "</label>";
+        });
+
+        container.innerHTML = html;
+      })
+      .catch(function () {
+        container.innerHTML =
+          '<p class="empty-msg" style="color:var(--red)">Erro ao carregar turmas.</p>';
+      });
   }
 
   function toggleTodas(cb) {
@@ -101,85 +120,22 @@ var Turmas = (function () {
 
   function confirmarPublicacao() {
     var turmas = getSelecionadas();
-    if (turmas.length === 0) {
-      App.toast("Selecione ao menos uma turma.");
-      return;
-    }
 
     FB.publicarAula(pubSemId, pubMatId, pubAula, turmas)
       .then(function () {
-        App.toast(
-          "Publicado para " +
-            (turmas[0] === "TODAS"
-              ? "todas as turmas"
-              : turmas.length + " turma(s)") +
-            "!",
-        );
-        renderPublicacoesExistentes();
+        var msg =
+          turmas.length === 0
+            ? "Aula ocultada de todas as turmas."
+            : "Acesso salvo para " +
+              (turmas[0] === "TODAS"
+                ? "todas as turmas"
+                : turmas.length + " turma(s)") +
+              ".";
+        App.toast(msg);
+        fecharPublicar();
       })
       .catch(function (e) {
-        App.toast("Erro ao publicar: " + e.message);
-      });
-  }
-
-  // ── REUTILIZAR PUBLICAÇÃO ─────────────────────────────
-
-  function renderPublicacoesExistentes() {
-    var container = document.getElementById("pub-reutilizar-lista");
-    container.innerHTML =
-      '<p style="font-size:.75rem;color:var(--text-muted)">Carregando...</p>';
-
-    FB.getTodasPublicacoes(pubSemId, pubMatId).then(function (pubs) {
-      if (pubs.length === 0) {
-        container.innerHTML =
-          '<p class="empty-msg">Nenhuma publicação anterior nesta matéria.</p>';
-        return;
-      }
-
-      var html = pubs
-        .map(function (p) {
-          var turmasLabel =
-            p.turmas[0] === "TODAS" ? "Todas as turmas" : p.turmas.join(", ");
-          var data = p.publicadoEm
-            ? new Date(p.publicadoEm).toLocaleDateString("pt-BR")
-            : "—";
-          return (
-            '<div class="reuse-item">' +
-            '<div class="reuse-info">' +
-            '<span class="reuse-titulo">' +
-            (p.aula ? p.aula.titulo : p.aulaId) +
-            "</span>" +
-            '<span class="reuse-meta">&#128100; ' +
-            turmasLabel +
-            " &nbsp;&#128197; " +
-            data +
-            "</span>" +
-            "</div>" +
-            '<button class="btn-sm btn-sm-mat" onclick="Turmas.reutilizar(\'' +
-            p._docId +
-            "')\">Reutilizar</button>" +
-            "</div>"
-          );
-        })
-        .join("");
-
-      container.innerHTML = html;
-    });
-  }
-
-  function reutilizar(docId) {
-    var turmas = getSelecionadas();
-    if (turmas.length === 0) {
-      App.toast("Selecione as turmas de destino antes de reutilizar.");
-      return;
-    }
-    FB.reutilizarPublicacao(docId, turmas)
-      .then(function () {
-        App.toast("Publicação reutilizada!");
-        renderPublicacoesExistentes();
-      })
-      .catch(function (e) {
-        App.toast("Erro: " + e.message);
+        App.toast("Erro ao salvar: " + e.message);
       });
   }
 
@@ -295,7 +251,6 @@ var Turmas = (function () {
     fecharPublicar: fecharPublicar,
     confirmarPublicacao: confirmarPublicacao,
     toggleTodas: toggleTodas,
-    reutilizar: reutilizar,
     abrirAlertas: abrirAlertas,
     fecharAlertas: fecharAlertas,
     marcarVisto: marcarVisto,

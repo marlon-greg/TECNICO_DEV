@@ -402,21 +402,32 @@ var FB = (function () {
   // Estrutura: /publicacoes/{semId}_{matId}_{aulaId}
   // { aulaId, turmas: ["TODAS"] ou ["hash1","hash2"], conteudo: {...} }
 
-  function publicarAula(semId, matId, aula, turmas) {
-    // turmas = ["TODAS"] ou array de hashes
-    var id = semId + "_" + matId + "_" + aula.id;
+  function getPublicacaoAula(semId, matId, aulaId) {
+    var id = semId + "_" + matId + "_" + aulaId;
     return db
       .collection("publicacoes")
       .doc(id)
-      .set({
-        semId: semId,
-        matId: matId,
-        aulaId: aula.id,
-        aula: aula,
-        turmas: turmas,
-        publicadoEm: new Date().toISOString(),
-        publicadoPor: currentUser ? currentUser.email : "",
+      .get()
+      .then(function (snap) {
+        return snap.exists ? snap.data() : null;
       });
+  }
+
+  function publicarAula(semId, matId, aula, turmas) {
+    var id = semId + "_" + matId + "_" + aula.id;
+    var ref = db.collection("publicacoes").doc(id);
+    if (!turmas || turmas.length === 0) {
+      return ref.delete();
+    }
+    return ref.set({
+      semId: semId,
+      matId: matId,
+      aulaId: aula.id,
+      aula: aula,
+      turmas: turmas,
+      publicadoEm: new Date().toISOString(),
+      publicadoPor: currentUser ? currentUser.email : "",
+    });
   }
 
   function getPublicacoesDaTurma(semId, matId, turmaHash) {
@@ -555,6 +566,7 @@ var FB = (function () {
     getTurma: getTurma,
     getAlertas: getAlertas,
     marcarAlertaVisto: marcarAlertaVisto,
+    getPublicacaoAula: getPublicacaoAula,
     publicarAula: publicarAula,
     getPublicacoesDaTurma: getPublicacoesDaTurma,
     getTodasPublicacoes: getTodasPublicacoes,
