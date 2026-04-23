@@ -397,9 +397,29 @@ var LinkManager = (function () {
     container.innerHTML = html;
   }
 
+  function getActiveLinks() {
+    return (db ? db.links || [] : []).filter(function (l) { return l.ativo; });
+  }
+
+  function addLinkToDb(link) {
+    if (!db) return;
+    var exists = db.links.find(function (l) { return l.hash === link.hash; });
+    if (!exists) db.links.push(link);
+    else Object.assign(exists, link);
+  }
+
+  function removeLinkFromDb(hash) {
+    if (!db) return;
+    var link = db.links.find(function (l) { return l.hash === hash; });
+    if (link) link.ativo = false;
+  }
+
   return {
     init: init,
     getResolved: getResolved,
+    getActiveLinks: getActiveLinks,
+    addLinkToDb: addLinkToDb,
+    removeLinkFromDb: removeLinkFromDb,
     openAdmin: openAdmin,
     closeAdmin: closeAdmin,
     createLink: createLink,

@@ -1437,3 +1437,109 @@ body.viewer-mode .btn-icon {
   margin-bottom: 0.3rem;
   gap: 0.5rem;
 }
+
+/* ═══════════════════════════════════════
+   TURMAS ADMIN
+═══════════════════════════════════════ */
+.ta-turma-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  margin-bottom: 0.65rem;
+  background: var(--bg-card);
+}
+.ta-turma-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.ta-turma-nome {
+  font-weight: 600;
+  font-size: 0.92rem;
+  flex: 1;
+  min-width: 0;
+}
+.ta-aluno-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.ta-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+  flex-wrap: wrap;
+}
+.ta-link-url {
+  font-size: 0.68rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ta-no-link {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-bottom: 0.4rem;
+}
+.ta-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.ta-aluno-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.3rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.ta-aluno-item.ta-aluno-inativo {
+  opacity: 0.45;
+}
+.ta-aluno-foto {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ta-aluno-foto-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-sub);
+  font-size: 1rem;
+}
+.ta-aluno-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.ta-aluno-nome {
+  font-size: 0.83rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ta-aluno-email {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ta-aluno-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}

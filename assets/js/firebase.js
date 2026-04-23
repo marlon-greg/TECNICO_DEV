@@ -484,6 +484,44 @@ var FB = (function () {
     return batch.commit();
   }
 
+  // ── FIRESTORE: TURMAS CONFIG ──────────────────────────
+
+  function getTurmasConfig() {
+    return db.collection("turmas_config")
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          lista.push(Object.assign({ id: doc.id }, doc.data()));
+        });
+        lista.sort(function (a, b) {
+          return (a.criado || "").localeCompare(b.criado || "");
+        });
+        return lista;
+      });
+  }
+
+  function saveTurmaConfig(turma) {
+    return db.collection("turmas_config").doc(turma.id).set(turma);
+  }
+
+  function deleteTurmaConfig(id) {
+    return db.collection("turmas_config").doc(id).delete();
+  }
+
+  function getAlunosDaTurma(hash) {
+    return db.collection("alunos")
+      .where("turma", "==", hash)
+      .get()
+      .then(function (snap) {
+        var lista = [];
+        snap.forEach(function (doc) {
+          lista.push(doc.data());
+        });
+        return lista;
+      });
+  }
+
   return {
     init: init,
     loginGoogle: loginGoogle,
@@ -520,5 +558,9 @@ var FB = (function () {
     getTodasPublicacoes: getTodasPublicacoes,
     reutilizarPublicacao: reutilizarPublicacao,
     LIMITE_TURMA: LIMITE_TURMA,
+    getTurmasConfig: getTurmasConfig,
+    saveTurmaConfig: saveTurmaConfig,
+    deleteTurmaConfig: deleteTurmaConfig,
+    getAlunosDaTurma: getAlunosDaTurma,
   };
 })();

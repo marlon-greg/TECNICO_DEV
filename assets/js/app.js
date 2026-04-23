@@ -491,8 +491,9 @@ var App = (function () {
 
   function publicarAulaAtual() {
     if (!curLesson || !curSemId || !curMatId) return;
+    var semId = curSemId, matId = curMatId, aulaId = curLesson.id;
     closeModal();
-    Turmas.abrirPublicar(curSemId, curMatId, curLesson.id);
+    Turmas.abrirPublicar(semId, matId, aulaId);
   }
   function abrirCronograma(semId, matId, matNome, matCh) {
     Schedule.openCronogramaModal(semId, matId, matNome, matCh);
@@ -603,6 +604,11 @@ var App = (function () {
       .getElementById("overlay-move")
       .addEventListener("click", function (e) {
         if (e.target === this) AdminPanel.closeMoveModal();
+      });
+    document
+      .getElementById("overlay-turmas-admin")
+      .addEventListener("click", function (e) {
+        if (e.target === this) TurmasAdmin.close();
       });
   }
 

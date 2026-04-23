@@ -110,10 +110,10 @@
         ></span>
         <button
           class="btn btn-ghost admin-only"
-          onclick="LinkManager.openAdmin()"
-          title="Gerenciar links de acesso"
+          onclick="TurmasAdmin.open()"
+          title="Gerenciar turmas"
         >
-          &#128279; Links
+          &#127979; Turmas
         </button>
         <button
           class="btn btn-ghost admin-only"
@@ -735,6 +735,57 @@
         </div>
         <div class="modal-body" style="max-height: 60vh; overflow-y: auto">
           <div id="alertas-lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+     MODAL: GESTÃO DE TURMAS (ADMIN)
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-turmas-admin">
+      <div class="modal modal-md">
+        <div class="modal-head">
+          <div class="modal-head-info">
+            <h3>&#127979; Turmas</h3>
+            <p>Crie turmas, gerencie links e veja seus alunos</p>
+          </div>
+          <button class="btn btn-x" onclick="TurmasAdmin.close()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+
+          <!-- VISÃO PRINCIPAL: lista + formulário de criação -->
+          <div id="turmas-admin-list-view">
+            <div class="mat-form-section" style="margin-bottom:1rem">
+              <div class="mat-form-title">+ Nova turma</div>
+              <div class="link-gen-row">
+                <input
+                  type="text"
+                  class="form-input"
+                  id="ta-nova-nome"
+                  placeholder="Ex: Turma A — 2026"
+                  style="flex:1"
+                />
+                <select class="form-select" id="ta-nova-sem" style="width:auto;min-width:140px">
+                  <option value="1">1º Semestre</option>
+                  <option value="2">2º Semestre</option>
+                  <option value="3">3º Semestre</option>
+                  <option value="4">4º Semestre</option>
+                </select>
+                <button class="btn btn-red" onclick="TurmasAdmin.criarTurma()">&#43; Criar</button>
+              </div>
+            </div>
+            <div id="turmas-admin-list" style="max-height:420px;overflow-y:auto"></div>
+          </div>
+
+          <!-- VISÃO DE ALUNOS DA TURMA -->
+          <div id="turmas-admin-alunos-view" style="display:none">
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+              <button class="btn btn-ghost" onclick="TurmasAdmin.voltarLista()">&#8592; Voltar</button>
+              <strong id="ta-alunos-titulo" style="font-size:.95rem"></strong>
+            </div>
+            <div id="ta-alunos-lista" style="max-height:440px;overflow-y:auto"></div>
+          </div>
+
         </div>
       </div>
     </div>
