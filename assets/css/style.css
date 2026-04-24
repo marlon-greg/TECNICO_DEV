@@ -1543,3 +1543,246 @@ body.viewer-mode .btn-icon {
   gap: 0.35rem;
   flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════
+   LINKS DA AULA (barra no modal de aula)
+═══════════════════════════════════════ */
+.aula-links-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: rgba(42, 125, 225, 0.04);
+  border-bottom: 1px solid var(--border-light);
+}
+.aula-links-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  align-self: center;
+  flex-shrink: 0;
+  margin-right: 0.1rem;
+}
+.aula-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.65rem;
+  background: rgba(42, 125, 225, 0.09);
+  border: 1px solid rgba(42, 125, 225, 0.22);
+  border-radius: 99px;
+  font-size: 0.78rem;
+  color: #2a7de1;
+  text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.aula-link-chip:hover {
+  background: rgba(42, 125, 225, 0.18);
+}
+.aula-link-img {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.aula-link-img img {
+  max-height: 72px;
+  max-width: 108px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════
+   LINKS GERAIS DA MATÉRIA (na lista expandida)
+═══════════════════════════════════════ */
+.mat-geral-links {
+  padding: 0.5rem 1rem 0.55rem;
+  background: rgba(42, 125, 225, 0.03);
+  border-bottom: 1px solid var(--border-light);
+}
+.mat-geral-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.mat-geral-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.mat-geral-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(42, 125, 225, 0.08);
+  border: 1px solid rgba(42, 125, 225, 0.2);
+  border-radius: 99px;
+  font-size: 0.75rem;
+  color: #2a7de1;
+  text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.mat-geral-chip:hover {
+  background: rgba(42, 125, 225, 0.17);
+}
+.mat-geral-img {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+}
+.mat-geral-img img {
+  max-height: 36px;
+  max-width: 54px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════
+   SECÇÕES NO MODAL DE MATERIAIS
+═══════════════════════════════════════ */
+.mat-section-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0.45rem 0 0.2rem;
+  margin-top: 0.3rem;
+  border-top: 1px solid var(--border-light);
+}
+.mat-section-title:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* ═══════════════════════════════════════
+   UPLOAD DE IMAGEM (formulário materiais)
+═══════════════════════════════════════ */
+.img-upload-area {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: border-color 0.15s, color 0.15s;
+}
+.img-upload-area:hover {
+  border-color: #2a7de1;
+  color: #2a7de1;
+}
+#mat-img-preview {
+  display: none;
+  max-width: 100%;
+  max-height: 150px;
+  margin-top: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.mat-item-img img {
+  max-width: 100%;
+  max-height: 110px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+/* ── thumbnails clicáveis ── */
+.mat-img-thumb {
+  cursor: zoom-in;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  transition: opacity 0.15s, transform 0.15s;
+  display: block;
+}
+.mat-img-thumb:hover {
+  opacity: 0.88;
+  transform: scale(1.03);
+}
+.aula-link-img .mat-img-thumb {
+  max-height: 72px;
+  max-width: 108px;
+}
+.mat-geral-img .mat-img-thumb {
+  max-height: 36px;
+  max-width: 54px;
+}
+.mat-item-img .mat-img-thumb {
+  max-width: 100%;
+  max-height: 110px;
+  margin-bottom: 0.3rem;
+}
+
+/* ═══════════════════════════════════════
+   LIGHTBOX DE IMAGENS
+═══════════════════════════════════════ */
+#overlay-lightbox.open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-box {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  max-width: 94vw;
+  max-height: 94vh;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 56px rgba(0, 0, 0, 0.55);
+}
+.lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 1rem;
+}
+.lightbox-title-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.lightbox-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: #111;
+  min-height: 200px;
+}
+#lightbox-img {
+  max-width: 90vw;
+  max-height: calc(94vh - 62px);
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+  user-select: none;
+}

@@ -298,6 +298,7 @@ var App = (function () {
           mat.nome +
           "')\">&#128279; Materiais complementares</div>";
       }
+      html += Materials.renderGeralLinks(semId, mat.id);
       if (aulasVis.length === 0 && todasAulas.length === 0) {
         html += '<div class="empty-msg">Nenhuma aula cadastrada ainda.</div>';
       } else if (aulasVis.length === 0 && isViewer) {
@@ -393,6 +394,8 @@ var App = (function () {
       ? marked.parse(lesson.notas)
       : '<p style="color:var(--text-faint);font-style:italic">Sem notas do professor.</p>';
     document.getElementById("json-ed").value = JSON.stringify(lesson, null, 2);
+    var linksEl = document.getElementById("pane-aula-links");
+    if (linksEl) linksEl.innerHTML = Materials.renderAulaLinks(semId, matId, lessonId);
     switchTab("content");
     document.getElementById("overlay").classList.add("open");
   }
@@ -602,6 +605,13 @@ var App = (function () {
     document.getElementById("overlay").addEventListener("click", function (e) {
       if (e.target === this) closeModal();
     });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        var lb = document.getElementById("overlay-lightbox");
+        if (lb && lb.classList.contains("open")) { Materials.closeLightbox(); return; }
+        closeModal();
+      }
+    });
     document
       .getElementById("overlay-move")
       .addEventListener("click", function (e) {
@@ -614,35 +624,65 @@ var App = (function () {
       });
   }
 
+  var _aulasUnsubs = [];
+
   function loadFromFirestore() {
     if (!window.FIREBASE_CONFIG || !state) {
       render();
       return;
     }
-    var total = 0,
-      done = 0;
+
+    var mats = [];
     state.semestres.forEach(function (sem) {
-      total += sem.materias.length;
+      sem.materias.forEach(function (mat) {
+        mats.push({ sem: sem, mat: mat });
+      });
     });
-    if (total === 0) {
+
+    if (mats.length === 0) {
       render();
       return;
     }
-    state.semestres.forEach(function (sem) {
-      sem.materias.forEach(function (mat) {
-        var p =
-          isViewer && alunoTurmaHash
-            ? FB.getPublicacoesDaTurma(sem.id, mat.id, alunoTurmaHash)
-            : FB.getAulas(sem.id, mat.id);
-        p.then(function (a) {
-          if (a && a.length > 0) mat.aulas = a;
-        })
+
+    // Alunos: busca única das publicações da turma
+    if (isViewer && alunoTurmaHash) {
+      var done = 0;
+      mats.forEach(function (item) {
+        FB.getPublicacoesDaTurma(item.sem.id, item.mat.id, alunoTurmaHash)
+          .then(function (a) {
+            if (a && a.length > 0) item.mat.aulas = a;
+          })
           .catch(function () {})
           .finally(function () {
             done++;
-            if (done === total) render();
+            if (done === mats.length) render();
           });
       });
+      return;
+    }
+
+    // Docentes: listener em tempo real para cada matéria
+    _aulasUnsubs.forEach(function (u) { u(); });
+    _aulasUnsubs = [];
+
+    var firstDone = 0;
+    var firstRenderred = false;
+
+    mats.forEach(function (item) {
+      var unsub = FB.onAulas(item.sem.id, item.mat.id, function (aulas) {
+        if (aulas && aulas.length > 0) item.mat.aulas = aulas;
+
+        if (!firstRenderred) {
+          firstDone++;
+          if (firstDone === mats.length) {
+            firstRenderred = true;
+            render();
+          }
+        } else {
+          render();
+        }
+      });
+      _aulasUnsubs.push(unsub);
     });
   }
 

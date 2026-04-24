@@ -179,6 +179,7 @@
             &#9998; Editar
           </div>
         </div>
+        <div id="pane-aula-links"></div>
         <div class="modal-body">
           <div class="tab-pane active md" id="pane-content"></div>
           <div class="tab-pane md" id="pane-notes"></div>
@@ -485,12 +486,13 @@
             <div class="sch-grid">
               <div class="form-group" style="grid-column: 1/-1">
                 <label class="form-label">Tipo</label>
-                <select class="form-select" id="mat-form-tipo">
+                <select class="form-select" id="mat-form-tipo" onchange="Materials.onTipoChange()">
                   <option value="video">▶ Vídeo</option>
                   <option value="curso">🎓 Curso</option>
                   <option value="artigo">📄 Artigo</option>
                   <option value="doc">📚 Documentação</option>
                   <option value="ferramenta">🛠 Ferramenta</option>
+                  <option value="imagem">🖼 Imagem</option>
                   <option value="outro">🔗 Outro</option>
                 </select>
               </div>
@@ -524,6 +526,20 @@
                   id="mat-form-url"
                   placeholder="https://..."
                 />
+              </div>
+              <div id="mat-img-section" style="display:none; grid-column: 1/-1">
+                <div class="form-label" style="margin-bottom:.4rem">Upload de imagem <span style="font-weight:400;opacity:.6">(opcional se informar URL acima)</span></div>
+                <div class="img-upload-area" onclick="document.getElementById('mat-img-input').click()">
+                  Clique para selecionar uma imagem (máx. 2&nbsp;MB)
+                  <input
+                    type="file"
+                    id="mat-img-input"
+                    accept="image/*"
+                    style="display:none"
+                    onchange="Materials.handleImageFile(this)"
+                  />
+                </div>
+                <img id="mat-img-preview" alt="Pré-visualização" />
               </div>
               <div class="form-group" style="grid-column: 1/-1">
                 <label class="form-label">Descrição (opcional)</label>
@@ -779,6 +795,24 @@
             <div id="ta-alunos-lista" style="max-height:440px;overflow-y:auto"></div>
           </div>
 
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+     LIGHTBOX DE IMAGENS
+═══════════════════════════════════════ -->
+    <div class="overlay" id="overlay-lightbox" onclick="if(event.target===this)Materials.closeLightbox()">
+      <div class="lightbox-box">
+        <div class="lightbox-head">
+          <span id="lightbox-titulo" class="lightbox-title-text"></span>
+          <div style="display:flex;gap:.4rem;align-items:center">
+            <a id="lightbox-download" class="btn" style="font-size:.8rem">&#11015; Baixar</a>
+            <button class="btn btn-x" onclick="Materials.closeLightbox()">&#x2715;</button>
+          </div>
+        </div>
+        <div class="lightbox-body">
+          <img id="lightbox-img" src="" alt="" />
         </div>
       </div>
     </div>
